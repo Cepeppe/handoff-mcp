@@ -9,6 +9,28 @@ any MCP client. The public formats (spec, outcome, runbook) and the tool contrac
 MIT-licensed and versioned; the npm package is `baton-handoff-mcp`. Status: work in
 progress, nothing is stable yet.
 
+## Running it as an MCP server
+
+`handoff-mcp` (or `handoff-mcp serve`, the same thing) speaks MCP over stdio and registers
+three tools:
+
+| Tool               | What it does                                                                                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `handoff_to_user`  | Opens a handoff from a spec, continues it with a reply, or re-attaches to it with `resume`. One flat input object; the server infers which of the three you meant. |
+| `handoff_verify`   | Reports the verification you performed after the user finished.                                                                                                    |
+| `handoff_runbooks` | Searches the saved runbooks before you write a spec.                                                                                                               |
+
+Every answer is an outcome with `status`, `final` and `instruction`: read `instruction` and
+do what it says. Mistakes come back as `{ "error": { "code", "message", "problems" } }` with
+a path and a fix per problem, never quoting the spec. `schemas/tool-contract.v1.md` is the
+contract, and it is what the descriptions the agent reads are generated from.
+
+Without the overlay application listening, the server still works: an open answers
+`status: text_mode` with the spec rendered as text — every value the certain-secret patterns
+matched masked out — so the handoff happens in the chat. Nothing is logged and no verified
+state exists in that mode, so continuing, resuming and verifying answer `APP_DISCONNECTED`
+instead.
+
 ## Validating a spec offline
 
 `handoff-mcp validate <spec.json>` runs the same pipeline the tool runs — the published

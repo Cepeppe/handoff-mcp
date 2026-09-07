@@ -49,10 +49,6 @@ pnpm smoke:sea     # runs the produced binary the way a user's machine would
 platform. It checks `--version`, that `--help` lists the five subcommands, that an unknown
 subcommand exits 2, and that `serve` answers an MCP `initialize` over stdio.
 
-> While `serve` is the placeholder of T-017, the `initialize` check reports itself as
-> _pending_ instead of failing, and starts asserting the real JSON-RPC result the moment
-> the placeholder message disappears. Everything else is asserted today.
-
 ### Windows
 
 ```bash

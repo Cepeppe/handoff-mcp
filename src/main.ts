@@ -2,9 +2,9 @@
  * CLI entry point (TECHNICAL-DESIGN §5.12).
  *
  * Routes the five subcommands of the CLI table: `serve` (the default), `hook stop`,
- * `validate <spec.json>`, `runbooks search --where … --goal …` and `doctor`. `--version`,
- * `--help`, `validate` and `runbooks search` do real work; every other subcommand answers
- * with the task that implements it.
+ * `validate <spec.json>`, `runbooks search --where … --goal …` and `doctor`. All but
+ * `hook stop` and `doctor` do real work; those two answer with the task that implements
+ * them.
  *
  * Output discipline (§5.12): the **result** of a subcommand goes to stdout — the JSON
  * decision of `hook stop` (§5.11, T-021), the JSON error or the summary line of `validate`,
@@ -16,10 +16,16 @@
  * folder that cannot be read), or the subcommand exists but is not implemented yet ·
  * 2 usage error (unknown subcommand, unknown option, missing argument, a file that cannot
  * be read).
+ *
+ * `serve` is the one subcommand that does not answer and return: it serves until the agent
+ * closes stdin, so `run` gives back a promise for it and a number for everything else.
  */
 import { readFileSync } from 'node:fs';
 
+import { readConfig } from './config';
 import { errorJson, handoffError, validateSpec, type HandoffSpec } from './format';
+import { createLogger } from './log';
+import { NullChannel, serve } from './mcp';
 import { defaultRunbookRoots, RunbookStore, searchRunbooks } from './runbooks';
 
 /**
@@ -41,11 +47,10 @@ export const VERSION: string =
 export type Command = 'serve' | 'hook-stop' | 'validate' | 'runbooks-search' | 'doctor';
 
 /** Subcommands that still answer with the task that will implement them. */
-type Placeholder = Exclude<Command, 'validate' | 'runbooks-search'>;
+type Placeholder = Exclude<Command, 'serve' | 'validate' | 'runbooks-search'>;
 
 /** The task that turns each placeholder into behaviour. */
 const IMPLEMENTED_BY: Record<Placeholder, string> = {
-  serve: 'T-017',
   'hook-stop': 'T-021',
   doctor: 'T-021',
 };
@@ -58,6 +63,7 @@ export interface RunbooksSearchArgs {
 }
 
 export type ParsedArgs =
+  | { kind: 'command'; command: 'serve' }
   | { kind: 'command'; command: 'validate'; file: string }
   | ({ kind: 'command'; command: 'runbooks-search' } & RunbooksSearchArgs)
   | { kind: 'command'; command: Placeholder }
@@ -299,8 +305,31 @@ function runRunbooksSearch(query: RunbooksSearchArgs, streams: CliStreams): numb
   return 0;
 }
 
-/** Routes one invocation and returns the process exit code. */
-export function run(argv: readonly string[], streams: CliStreams = consoleStreams): number {
+/**
+ * `handoff-mcp serve`: the three MCP tools over stdio (§5.3).
+ *
+ * The channel to the app is `NullChannel` until T-020 plugs the real client in, so every
+ * call takes the degraded path of §5.2 step 4: an open comes back as text mode, everything
+ * that needs the handoff's state as `APP_DISCONNECTED`. The runbook store gets the CLI's
+ * own stderr as its warning sink, so a file it has to skip is named for the person reading
+ * the session rather than swallowed (§5.10).
+ */
+function runServe(streams: CliStreams): Promise<number> {
+  const config = readConfig();
+  return serve({
+    config,
+    version: VERSION,
+    channel: NullChannel,
+    runbooks: new RunbookStore(defaultRunbookRoots(), { warn: streams.err }),
+    logger: createLogger(config.logLevel, streams.err),
+  });
+}
+
+/** Routes one invocation and returns the process exit code, or a promise for it. */
+export function run(
+  argv: readonly string[],
+  streams: CliStreams = consoleStreams,
+): number | Promise<number> {
   const parsed = parseArgs(argv);
 
   switch (parsed.kind) {
@@ -318,6 +347,7 @@ export function run(argv: readonly string[], streams: CliStreams = consoleStream
       return 2;
 
     case 'command': {
+      if (parsed.command === 'serve') return runServe(streams);
       if (parsed.command === 'validate') return runValidate(parsed.file, streams);
       if (parsed.command === 'runbooks-search') return runRunbooksSearch(parsed, streams);
       streams.err(
@@ -329,5 +359,11 @@ export function run(argv: readonly string[], streams: CliStreams = consoleStream
 }
 
 if (typeof __HANDOFF_MCP_CLI_ENTRY__ !== 'undefined' && __HANDOFF_MCP_CLI_ENTRY__) {
-  process.exitCode = run(process.argv.slice(2));
+  const outcome = run(process.argv.slice(2));
+  if (typeof outcome === 'number') process.exitCode = outcome;
+  else {
+    void outcome.then((code) => {
+      process.exitCode = code;
+    });
+  }
 }

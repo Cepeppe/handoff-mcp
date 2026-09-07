@@ -26,7 +26,11 @@ function invoke(
       return content;
     },
   };
-  return { code: run(argv, streams), out, err };
+  const code = run(argv, streams);
+  if (typeof code !== 'number') {
+    throw new Error(`${argv.join(' ')} did not answer with an exit code; only serve serves`);
+  }
+  return { code, out, err };
 }
 
 /** The spec of the acceptance criterion, read from the repository. */
@@ -123,7 +127,6 @@ describe('run', () => {
   });
 
   it.each<[string[], Command, string]>([
-    [[], 'serve', 'T-017'],
     [['hook', 'stop'], 'hook-stop', 'T-021'],
     [['doctor'], 'doctor', 'T-021'],
   ])('reports %j as not implemented yet', (argv, command, task) => {

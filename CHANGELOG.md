@@ -40,6 +40,29 @@ schema version, which is independent of the package version.
 - `fixtures/matching/*.json` (19 cases, with the format documented beside them) and
   `test/contract/matching.test.ts` pin the matching rule for every implementation, and the
   conversion is asserted equal to the published `runbook_match` outcome fixture.
+- The MCP server itself: `handoff-mcp serve` registers `handoff_to_user`, `handoff_verify`
+  and `handoff_runbooks` over stdio with the descriptions, input schemas and annotations
+  generated from `schemas/tool-contract.v1.md`, registered verbatim, plus an `outputSchema`
+  per tool — the published outcome schema with the spec schema bundled into it, so a client
+  resolves every reference without fetching anything.
+- Shape inference for `handoff_to_user`: exactly one of `spec`, `reply` (with `handoff_id`)
+  or `resume`, and anything else — a field borrowed from another shape, a field the schema
+  does not declare, a control field of the wrong type or outside its bounds — is
+  `SHAPE_AMBIGUOUS` with the fix text that lists the three shapes again.
+- The open path in full: the validation pipeline, the certain detector, and the runbook
+  safety net, which answers `runbook_match` without opening anything when a saved runbook
+  already covers the work and is skipped by `ignore_runbook`. A runbook file that cannot be
+  read, or a folder that cannot be listed, never stops a handoff from opening.
+- Text mode: with no overlay application reachable, an open comes back as the `text_mode`
+  outcome with the spec rendered as text and every certain secret masked, and everything
+  that needs the handoff's state comes back as `APP_DISCONNECTED`. Every outcome takes its
+  `final` and its `instruction` from the published contract, with `<id>` substituted and
+  the Stop-hook variant chosen by the session's capability row, and carries the same object
+  in `structuredContent` as in its text block; an image block accompanies it only when the
+  user sent an image and the client can display one.
+- `test/unit/mcp/` drives all of this over the SDK's in-memory transport, which validates
+  every answer against the registered output schema, and `test/contract/mcp-tools.test.ts`
+  compiles those schemas and runs the fourteen published outcome fixtures through them.
 
 ## [0.1.0] - 2026-09-07
 
