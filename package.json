@@ -23,6 +23,7 @@
   "scripts": {
     "gen": "node build/gen-contract.mjs",
     "build": "node build/gen-contract.mjs && node build/bundle.mjs",
+    "handoff-mcp": "node dist/handoff-mcp.cjs",
     "build:sea": "pnpm build && node build/sea/build-sea.mjs",
     "smoke:sea": "node build/sea/smoke.mjs",
     "pack:format": "node build/format-tarball.mjs",

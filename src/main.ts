@@ -2,17 +2,22 @@
  * CLI entry point (TECHNICAL-DESIGN §5.12).
  *
  * Routes the five subcommands of the CLI table: `serve` (the default), `hook stop`,
- * `validate <spec.json>`, `runbooks search --where … --goal …` and `doctor`. Only
- * `--version` and `--help` do real work at this stage; every subcommand answers with the
- * task that implements it.
+ * `validate <spec.json>`, `runbooks search --where … --goal …` and `doctor`. `--version`,
+ * `--help` and `validate` do real work; every other subcommand answers with the task that
+ * implements it.
  *
- * Output discipline (§5.12): everything human-readable goes to **stderr**, because stdout
- * is reserved for the MCP stdio transport. The one documented exception is `hook stop`,
- * which prints its decision as JSON on stdout (§5.11); it is implemented in T-021.
+ * Output discipline (§5.12): the **result** of a subcommand goes to stdout — the JSON
+ * decision of `hook stop` (§5.11, T-021), the JSON error or the summary line of `validate`
+ * — and everything else, help, usage errors and logging, goes to stderr. stdout is
+ * reserved for the MCP stdio transport only while `serve` is serving.
  *
- * Exit codes: 0 success · 1 the subcommand exists but is not implemented yet · 2 usage
- * error (unknown subcommand, unknown option, missing argument).
+ * Exit codes: 0 success · 1 the command ran and answered no (an invalid spec), or the
+ * subcommand exists but is not implemented yet · 2 usage error (unknown subcommand,
+ * unknown option, missing argument, a file that cannot be read).
  */
+import { readFileSync } from 'node:fs';
+
+import { errorJson, handoffError, validateSpec, type HandoffSpec } from './format';
 
 /**
  * Replaced by `build/bundle.mjs` with the version from `package.json`. It stays undefined
@@ -32,17 +37,20 @@ export const VERSION: string =
 /** Subcommands of the CLI table, in the order §5.12 lists them. */
 export type Command = 'serve' | 'hook-stop' | 'validate' | 'runbooks-search' | 'doctor';
 
+/** Subcommands that still answer with the task that will implement them. */
+type Placeholder = Exclude<Command, 'validate'>;
+
 /** The task that turns each placeholder into behaviour. */
-const IMPLEMENTED_BY: Record<Command, string> = {
+const IMPLEMENTED_BY: Record<Placeholder, string> = {
   serve: 'T-017',
   'hook-stop': 'T-021',
-  validate: 'T-013',
   'runbooks-search': 'T-016',
   doctor: 'T-021',
 };
 
 export type ParsedArgs =
-  | { kind: 'command'; command: Command }
+  | { kind: 'command'; command: 'validate'; file: string }
+  | { kind: 'command'; command: Placeholder }
   | { kind: 'version' }
   | { kind: 'help' }
   | { kind: 'usage-error'; message: string };
@@ -67,7 +75,9 @@ Environment:
   HANDOFF_HOME                            Override ~/.handoff (tests only)
   HANDOFF_MCP_LOG                         error (default) | debug
 
-Human-readable output goes to stderr; stdout carries the MCP stdio transport.`;
+A subcommand prints its result on stdout: validate prints a summary line, or the same JSON
+error the tool returns and exits 1. Help, usage errors and logging go to stderr; while serve
+is serving, stdout carries the MCP stdio transport and nothing else.`;
 
 /**
  * Pure argument parsing, so the routing can be tested without running anything.
@@ -93,10 +103,11 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     }
 
     case 'validate': {
-      if (argv[1] === undefined) {
+      const file = argv[1];
+      if (file === undefined) {
         return { kind: 'usage-error', message: 'validate needs a spec file' };
       }
-      return { kind: 'command', command: 'validate' };
+      return { kind: 'command', command: 'validate', file };
     }
 
     case 'runbooks': {
@@ -117,17 +128,86 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 }
 
 /**
- * Everything the CLI writes, injectable so tests observe it instead of the console.
- * Only stderr is here: stdout belongs to the MCP transport, and the one command that
- * writes to it (`hook stop`, §5.11) gets its own channel in T-021.
+ * Everything the CLI reads and writes, injectable so tests observe it instead of the
+ * console and the file system. `out` carries the result of a subcommand, `err` everything
+ * else; `readFile` throws the way `readFileSync` does when the file cannot be read.
  */
 export interface CliStreams {
+  out: (line: string) => void;
   err: (line: string) => void;
+  readFile: (path: string) => string;
 }
 
 const consoleStreams: CliStreams = {
+  out: (line) => process.stdout.write(`${line}\n`),
   err: (line) => process.stderr.write(`${line}\n`),
+  readFile: (path) => readFileSync(path, 'utf8'),
 };
+
+/** `2 steps`, `1 value`: counts only, never what the spec says. */
+function count(n: number, noun: string): string {
+  return `${String(n)} ${noun}${n === 1 ? '' : 's'}`;
+}
+
+/** The one line a valid spec prints. It reports sizes, never content (R-19). */
+function summarise(file: string, spec: HandoffSpec): string {
+  const secrets = spec.secrets === undefined ? 0 : Object.keys(spec.secrets).length;
+  return [
+    `${file}: valid handoff spec (spec_version ${String(spec.spec_version)}`,
+    count(spec.steps.length, 'step'),
+    count(Object.keys(spec.values).length, 'value'),
+    count(secrets, 'secret'),
+    `verify ${spec.verify === undefined ? 'absent' : 'present'})`,
+  ].join(', ');
+}
+
+/** The position a JSON parser reported, without the fragment of the file around it. */
+function parsePosition(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  return /\bat position \d+(?: \(line \d+ column \d+\))?/.exec(message)?.[0] ?? '';
+}
+
+/**
+ * `handoff-mcp validate <spec.json>`: the same pipeline, the same JSON error, offline
+ * (§5.4). Exit 0 with a one-line summary, 1 with the error the tool would have returned,
+ * 2 when the file itself cannot be read.
+ */
+function runValidate(file: string, streams: CliStreams): number {
+  let text: string;
+  try {
+    text = streams.readFile(file);
+  } catch (cause) {
+    streams.err(`handoff-mcp: cannot read ${file}: ${cause instanceof Error ? cause.message : ''}`);
+    return 2;
+  }
+
+  let document: unknown;
+  try {
+    document = JSON.parse(text);
+  } catch (cause) {
+    const position = parsePosition(cause);
+    streams.out(
+      errorJson(
+        handoffError('SPEC_INVALID', [
+          {
+            path: '',
+            problem: 'The file is not valid JSON.',
+            fix: `Fix the JSON syntax${position === '' ? '' : ` ${position}`} and validate again.`,
+          },
+        ]),
+      ),
+    );
+    return 1;
+  }
+
+  const result = validateSpec(document);
+  if (!result.ok) {
+    streams.out(errorJson(result.error));
+    return 1;
+  }
+  streams.out(summarise(file, result.spec));
+  return 0;
+}
 
 /** Routes one invocation and returns the process exit code. */
 export function run(argv: readonly string[], streams: CliStreams = consoleStreams): number {
@@ -147,11 +227,13 @@ export function run(argv: readonly string[], streams: CliStreams = consoleStream
       streams.err(HELP_TEXT);
       return 2;
 
-    case 'command':
+    case 'command': {
+      if (parsed.command === 'validate') return runValidate(parsed.file, streams);
       streams.err(
         `handoff-mcp: ${parsed.command} is not implemented (${IMPLEMENTED_BY[parsed.command]})`,
       );
       return 1;
+    }
   }
 }
 

@@ -9,6 +9,23 @@ schema version, which is independent of the package version.
 
 ## [Unreleased]
 
+### Added
+
+- The validation pipeline: `validateSpec` checks `spec_version` before the schema, then the
+  published schema with every error collected at once, then the semantic rules the schema
+  cannot express — control fields left inside the spec, value keys a step cites without
+  declaring, runbook placeholders never replaced, URL schemes outside the closed list and
+  strings that are empty once trimmed. Every problem comes back with the path of the
+  offending location, what is wrong there and the fix text of the design, and never with a
+  value of the spec. `validateReplacementSteps` applies the same steps schema and the same
+  rules to the steps of a continue call.
+- `handoff-mcp validate <spec.json>`: the same pipeline offline, printing the same JSON
+  error the tool returns and exiting 1, or a one-line summary and 0. `pnpm handoff-mcp`
+  runs the built bundle from a checkout.
+- `test/contract/validate.test.ts` asserts the error code and the exact path of every
+  invalid spec fixture, and `test/unit/format/` the exact texts of each rule, the
+  translation of every schema keyword, and that no rendered error carries a spec value.
+
 ## [0.1.0] - 2026-09-07
 
 Foundations: formats, patterns, channel definition, SEA build. The server is **not
