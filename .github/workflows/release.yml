@@ -1,0 +1,253 @@
+name: Release
+
+# Turns a tag into the release of TECHNICAL-DESIGN §3.5: the standalone executables, the
+# format tarball, `SHA256SUMS` and its detached minisign signature, with the CHANGELOG
+# section as the release notes and an npm publish that stays off until someone turns it on.
+#
+# Three things are deliberate.
+#
+#   * The tag is not trusted. `guard` refuses to release unless the tag is exactly
+#     `v<package.json version>` and the changelog already has a section for it, before any
+#     binary is built. A release with the wrong version number is not fixable afterwards:
+#     the app pins these assets by name and by hash (§3.5).
+#   * The darwin legs are behind a boolean input that defaults to off, because macOS is
+#     deferred (TASKS.md §0.4 item 7) and its minutes cost 10x. A tag push therefore
+#     publishes `win32-x64` and the format tarball; dispatching this workflow on the tag
+#     with the input on adds the two macOS binaries.
+#   * Nothing is announced before it is checked. The last step of the release job downloads
+#     what was just published and verifies every hash and the signature against the public
+#     key committed in `keys/`, so a release the world cannot verify is a red run.
+#
+# The SEA jobs are the ones of `sea.yml` (T-009). They are written out again rather than
+# called as a reusable workflow because `sea.yml` gates its darwin legs on the event name,
+# which a caller cannot override; `test/unit/release.test.ts` fails if the two definitions
+# drift apart.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      include_macos:
+        description: Also build and publish the two darwin binaries
+        type: boolean
+        default: false
+      macos_x64_runner:
+        description: Runner label for the darwin-x64 leg
+        default: macos-15-intel
+        required: false
+
+permissions:
+  contents: read
+
+# A release is never cancelled half way: an interrupted run can leave a tag with some of
+# its assets, and the next attempt would have to clean up after it.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: guard
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: The tag is the version of package.json
+        id: version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match the package.json version $version"
+            exit 1
+          fi
+          echo "releasing $version from $GITHUB_REF_NAME"
+
+      - name: The changelog has a section for it
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: node build/changelog-section.mjs "$VERSION"
+
+  sea_win32_x64:
+    name: sea win32-x64
+    needs: guard
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:sea
+      - run: pnpm smoke:sea
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sea-win32-x64
+          path: dist/sea/handoff-mcp-*-win32-x64.exe
+          if-no-files-found: error
+
+  sea_darwin_arm64:
+    name: sea darwin-arm64
+    needs: guard
+    if: ${{ inputs.include_macos }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:sea
+      - run: pnpm smoke:sea
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sea-darwin-arm64
+          path: dist/sea/handoff-mcp-*-darwin-arm64
+          if-no-files-found: error
+
+  sea_darwin_x64:
+    name: sea darwin-x64
+    needs: guard
+    if: ${{ inputs.include_macos }}
+    runs-on: ${{ inputs.macos_x64_runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:sea
+      - run: pnpm smoke:sea
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sea-darwin-x64
+          path: dist/sea/handoff-mcp-*-darwin-x64
+          if-no-files-found: error
+
+  release:
+    name: release
+    needs: [guard, sea_win32_x64, sea_darwin_arm64, sea_darwin_x64]
+    # The darwin jobs are skipped on a tag push, and a skipped dependency must not skip the
+    # release; a failed one must.
+    if: ${{ !cancelled() && needs.guard.result == 'success' && needs.sea_win32_x64.result == 'success' && !contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Collect the executables built by the SEA jobs
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/assets
+          pattern: sea-*
+          merge-multiple: true
+
+      - name: Build the format tarball
+        run: node build/format-tarball.mjs --out dist/assets
+
+      - name: Checksum every asset
+        working-directory: dist/assets
+        run: |
+          sha256sum handoff-mcp-* > SHA256SUMS
+          cat SHA256SUMS
+
+      # `MINISIGN_SECRET_KEY` and `MINISIGN_PASSWORD` are the repository secrets of T-010.
+      # The key file is written with a private umask and deleted in the same step, and the
+      # password reaches minisign on stdin, so neither value can reach the log. The
+      # verification right after is what proves the secret key still matches the public key
+      # committed in `keys/` — the app pins that key, so a silent rotation would break every
+      # installation rather than this run.
+      - name: Sign the checksums with the release key
+        working-directory: dist/assets
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq minisign
+          umask 077
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > minisign.key
+          printf '%s\n' "$MINISIGN_PASSWORD" | minisign -S -s minisign.key -m SHA256SUMS
+          rm -f minisign.key
+          minisign -Vm SHA256SUMS -p ../../keys/handoff-mcp-release.pub
+
+      - name: Release notes from the changelog
+        run: node build/changelog-section.mjs "$VERSION" > dist/notes.md
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --notes-file dist/notes.md \
+            --verify-tag \
+            dist/assets/*
+
+      - name: Verify what was published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node build/verify-release.mjs "$VERSION" keys/handoff-mcp-release.pub --repo "$GITHUB_REPOSITORY"
+
+  # Publishing to npm is deferred with the public release (TASKS.md §0.4 item 8): the
+  # repository variable PUBLISH_NPM is `false`, so this job is skipped and the run stays
+  # green. T-024 sets the variable, adds NPM_TOKEN and turns on `--provenance` once trusted
+  # publishing is configured for `baton-handoff-mcp`.
+  npm:
+    name: npm publish
+    needs: [guard, release]
+    if: ${{ vars.PUBLISH_NPM == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public

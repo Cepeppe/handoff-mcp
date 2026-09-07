@@ -9,7 +9,25 @@ schema version, which is independent of the package version.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-07
+
+Foundations: formats, patterns, channel definition, SEA build. The server is **not
+functional yet** — `serve`, `hook stop`, `validate`, `runbooks search` and `doctor` print
+the task that implements them and exit. What this release publishes is the public part of
+the contract, so that the overlay application can pin it and build against it.
+
 ### Added
+
+- Release pipeline: `.github/workflows/release.yml` turns a `v*` tag into the assets of the
+  design — the standalone executables, `handoff-mcp-<ver>-format.tar.gz` with the schemas,
+  the patterns, the channel definition, the fixtures, the documentation and a
+  `FORMAT-VERSION` file, then `SHA256SUMS` and its detached minisign signature — and
+  refuses to start unless the tag is the version of `package.json` and the changelog has a
+  section for it. `build/verify-release.mjs` downloads a published release and checks every
+  hash and the signature against `keys/handoff-mcp-release.pub`, with the minisign
+  verification self-contained so that a consumer needs only Node. The two darwin binaries
+  are built when the workflow is dispatched with `include_macos`, and the npm publish waits
+  for the `PUBLISH_NPM` repository variable.
 
 - Standalone executables: `build/sea/build-sea.mjs` turns the esbuild bundle into a Node
   Single Executable Application named after the release asset of the platform it runs on,
