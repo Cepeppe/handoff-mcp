@@ -1,0 +1,641 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Cepeppe/handoff-mcp/main/protocol/channel/channel.v1.schema.json",
+  "title": "Internal channel protocol v1",
+  "description": "INTERNAL, subject to change without notice. One JSON-RPC 2.0 message per line (NDJSON, UTF-8). A whole line validates against this schema: the top-level oneOf discriminates requests, notifications, responses and error responses, and inside each group the method (or, for hello, the role) selects the shape. See README.md in this folder.",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/notification" },
+    { "$ref": "#/$defs/response" },
+    { "$ref": "#/$defs/error_response" }
+  ],
+  "$defs": {
+    "jsonrpc": { "const": "2.0" },
+    "id": {
+      "description": "JSON-RPC request id. Both peers emit positive integers, increasing per connection; strings are accepted for JSON-RPC conformance.",
+      "anyOf": [
+        { "type": "integer", "minimum": 1 },
+        { "type": "string", "minLength": 1, "maxLength": 64 }
+      ]
+    },
+    "protocol_version": {
+      "description": "The version a peer claims to speak. Deliberately not fixed to 1: a hello carrying another version must still parse, so the app can answer protocol_unsupported instead of closing on a framing error (TECHNICAL-DESIGN §6.5).",
+      "type": "integer",
+      "minimum": 1
+    },
+    "protocol_version_current": {
+      "description": "The version this schema defines. Equal to the content of protocol/channel/protocol_version.",
+      "const": 1
+    },
+    "token": {
+      "description": "The per-installation channel token: 32 random bytes as 64 lowercase hex characters (SRV-07, §4.1).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.+-]+)?$"
+    },
+    "handoff_id": { "type": "string", "pattern": "^hf_[0-9a-hjkmnp-tv-z]{10}$" },
+    "session_ref": { "type": "string", "pattern": "^ses_[0-9a-hjkmnp-tv-z]{8}$" },
+    "call_id": { "type": "string", "pattern": "^call_[0-9a-hjkmnp-tv-z]{8}$" },
+    "agent_id": {
+      "description": "The capability-table key resolved for this session (§5.6): claude-code, codex, cursor, copilot, opencode, unknown. Not an enum, so a new adapter does not bump the protocol.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+    },
+    "path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "handoff_state": {
+      "description": "The states of the app-side handoff lifecycle (§8.1).",
+      "enum": [
+        "awaiting_spec",
+        "active",
+        "deferred",
+        "parked",
+        "awaiting_verification",
+        "verified",
+        "confirmed_by_user",
+        "failed",
+        "not_verified",
+        "abandoned"
+      ]
+    },
+    "resumed_from": {
+      "description": "The opening session, when the call now attached comes from a different one (TOOL-08).",
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["agent", "project"],
+          "properties": {
+            "agent": { "type": "string", "minLength": 1 },
+            "project": { "type": "string", "minLength": 1 }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "spec": {
+      "$ref": "../../schemas/handoff-spec.v1.schema.json"
+    },
+    "steps": {
+      "$ref": "../../schemas/handoff-spec.v1.schema.json#/properties/steps"
+    },
+    "value_name": {
+      "$ref": "../../schemas/handoff-spec.v1.schema.json#/$defs/value_name"
+    },
+    "outcome": {
+      "$ref": "../../schemas/handoff-outcome.v1.schema.json"
+    },
+    "secret_treated": {
+      "$ref": "../../schemas/handoff-outcome.v1.schema.json#/properties/secret_treated"
+    },
+    "identity": {
+      "description": "Who is connecting (§5.8). The hook sends no project_dir; the ancestor chain is best effort and empty on Windows, where the app completes it itself (DD-22).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pid", "ppid", "ancestors", "cwd"],
+      "properties": {
+        "pid": { "type": "integer", "minimum": 1 },
+        "ppid": { "type": "integer", "minimum": 0 },
+        "ancestors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pid", "name"],
+            "properties": {
+              "pid": { "type": "integer", "minimum": 1 },
+              "name": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "cwd": { "$ref": "#/$defs/path" },
+        "project_dir": { "$ref": "#/$defs/path" }
+      }
+    },
+    "identity_server": {
+      "description": "A server always knows its project folder (CLAUDE_PROJECT_DIR or the working directory, §5.8).",
+      "allOf": [
+        { "$ref": "#/$defs/identity" },
+        {
+          "type": "object",
+          "required": ["project_dir"],
+          "properties": { "project_dir": { "$ref": "#/$defs/path" } }
+        }
+      ]
+    },
+    "client": {
+      "description": "clientInfo from the MCP initialize handshake.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "version": { "type": "string", "minLength": 1, "maxLength": 100 }
+      }
+    },
+    "capability_row": {
+      "description": "The capability row already resolved by the server (§5.6). The app adapts its UI to it and owns no agent facts (ADPT-03). The five required fields are the ones §6.4 sends; the optional ones are the remaining columns of the §5.6 table.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent_id", "support", "images_in_results", "stop_hook", "tool_timeout_ms"],
+      "properties": {
+        "agent_id": { "$ref": "#/$defs/agent_id" },
+        "support": { "enum": ["full", "base", "unsupported"] },
+        "images_in_results": { "type": "boolean" },
+        "stop_hook": { "type": "boolean" },
+        "tool_timeout_ms": {
+          "description": "The resolved timeout for this session, null when nothing is known and the heartbeat falls back to 50 s (TOOL-06a).",
+          "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }]
+        },
+        "display_name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "subagent_stop_hook": { "type": "boolean" },
+        "session_identity": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "user_request_delivery": {
+          "type": "array",
+          "items": { "enum": ["clipboard_focus", "stop_hook"] }
+        },
+        "cancellation_notifications": { "type": "boolean" }
+      }
+    },
+    "hook_input": {
+      "description": "The hook payload the agent wrote on the hook process stdin (§5.11). agent_id and agent_type are the agent's own SubagentStop fields, unrelated to the capability-table agent_id. transcript_path is deliberately not forwarded.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_id", "hook_event_name", "stop_hook_active"],
+      "properties": {
+        "session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "hook_event_name": { "enum": ["Stop", "SubagentStop"] },
+        "stop_hook_active": { "type": "boolean" },
+        "agent_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "agent_type": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+
+    "hello_server_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_version",
+        "token",
+        "role",
+        "server_version",
+        "identity",
+        "agent_id",
+        "client",
+        "capability_row"
+      ],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/protocol_version" },
+        "token": { "$ref": "#/$defs/token" },
+        "role": { "const": "server" },
+        "server_version": { "$ref": "#/$defs/semver" },
+        "identity": { "$ref": "#/$defs/identity_server" },
+        "agent_id": { "$ref": "#/$defs/agent_id" },
+        "client": { "$ref": "#/$defs/client" },
+        "capability_row": { "$ref": "#/$defs/capability_row" }
+      }
+    },
+    "hello_hook_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol_version", "token", "role", "identity", "hook"],
+      "properties": {
+        "protocol_version": { "$ref": "#/$defs/protocol_version" },
+        "token": { "$ref": "#/$defs/token" },
+        "role": { "const": "hook" },
+        "server_version": { "$ref": "#/$defs/semver" },
+        "identity": { "$ref": "#/$defs/identity" },
+        "hook": { "$ref": "#/$defs/hook_input" }
+      }
+    },
+    "hello_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app_version", "protocol_version", "session_ref"],
+      "properties": {
+        "app_version": { "$ref": "#/$defs/semver" },
+        "protocol_version": { "$ref": "#/$defs/protocol_version_current" },
+        "session_ref": {
+          "description": "Assigned when a server registers. Null for role hook, which is served and closed without registering a session (§6.2).",
+          "anyOf": [{ "$ref": "#/$defs/session_ref" }, { "type": "null" }]
+        }
+      }
+    },
+
+    "handoff_open_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["call_id", "spec", "secret_treated"],
+      "properties": {
+        "call_id": { "$ref": "#/$defs/call_id" },
+        "spec": { "$ref": "#/$defs/spec" },
+        "secret_treated": { "$ref": "#/$defs/secret_treated" },
+        "request_id": {
+          "description": "The id of a user-opened request. The handoff then takes that id (DD-13).",
+          "anyOf": [{ "$ref": "#/$defs/handoff_id" }, { "type": "null" }]
+        }
+      }
+    },
+    "handoff_open_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["handoff_id", "resumed_from"],
+      "properties": {
+        "handoff_id": { "$ref": "#/$defs/handoff_id" },
+        "resumed_from": { "$ref": "#/$defs/resumed_from" }
+      }
+    },
+
+    "handoff_continue_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["call_id", "handoff_id", "reply"],
+      "properties": {
+        "call_id": { "$ref": "#/$defs/call_id" },
+        "handoff_id": { "$ref": "#/$defs/handoff_id" },
+        "reply": { "type": "string", "minLength": 1 },
+        "replacement_steps": { "$ref": "#/$defs/steps" }
+      }
+    },
+    "handoff_continue_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok"],
+      "properties": { "ok": { "const": true } }
+    },
+
+    "handoff_resume_params": {
+      "description": "session_ref is optional: §6.3 does not list it, §5.7 does. The connection already identifies the session, so the app may ignore it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["call_id", "handoff_id"],
+      "properties": {
+        "call_id": { "$ref": "#/$defs/call_id" },
+        "handoff_id": { "$ref": "#/$defs/handoff_id" },
+        "session_ref": { "$ref": "#/$defs/session_ref" }
+      }
+    },
+    "handoff_resume_result": {
+      "description": "The snapshot of §5.7: a final outcome (returned with already_delivered), a queued undelivered event, or nothing, in which case the call attaches and waits.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": { "$ref": "#/$defs/handoff_state" },
+        "outcome": { "anyOf": [{ "$ref": "#/$defs/outcome" }, { "type": "null" }] },
+        "resumed_from": { "$ref": "#/$defs/resumed_from" }
+      }
+    },
+
+    "handoff_verify_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["handoff_id", "verify"],
+      "properties": {
+        "handoff_id": { "$ref": "#/$defs/handoff_id" },
+        "verify": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ok", "detail"],
+          "properties": {
+            "ok": {
+              "description": "null means the agent could not verify (§4.7.2).",
+              "type": ["boolean", "null"]
+            },
+            "detail": { "type": ["string", "null"], "maxLength": 4000 }
+          }
+        }
+      }
+    },
+    "handoff_verify_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome"],
+      "properties": { "outcome": { "$ref": "#/$defs/outcome" } }
+    },
+
+    "hook_stop_params": { "type": "object", "additionalProperties": false },
+    "hook_stop_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["block"],
+      "properties": {
+        "block": { "type": "boolean" },
+        "reason": {
+          "description": "Present only when block is true: the text the hook prints for the agent (§7.5).",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+
+    "ping_params": { "type": "object", "additionalProperties": false },
+    "ping_result": { "type": "object", "additionalProperties": false },
+
+    "session_bye_params": { "type": "object", "additionalProperties": false },
+    "handoff_detach_call_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["handoff_id", "call_id", "reason"],
+      "properties": {
+        "handoff_id": { "$ref": "#/$defs/handoff_id" },
+        "call_id": { "$ref": "#/$defs/call_id" },
+        "reason": { "enum": ["heartbeat", "cancelled"] }
+      }
+    },
+    "handoff_event_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["call_id", "handoff_id", "outcome"],
+      "properties": {
+        "call_id": { "$ref": "#/$defs/call_id" },
+        "handoff_id": { "$ref": "#/$defs/handoff_id" },
+        "outcome": { "$ref": "#/$defs/outcome" }
+      }
+    },
+    "app_shutdown_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason"],
+      "properties": { "reason": { "type": "string", "minLength": 1 } }
+    },
+
+    "hello_server_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "method", "params"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "hello" },
+        "params": { "$ref": "#/$defs/hello_server_params" }
+      }
+    },
+    "hello_hook_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "method", "params"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "hello" },
+        "params": { "$ref": "#/$defs/hello_hook_params" }
+      }
+    },
+    "handoff_open_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "method", "params"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "handoff.open" },
+        "params": { "$ref": "#/$defs/handoff_open_params" }
+      }
+    },
+    "handoff_continue_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "method", "params"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "handoff.continue" },
+        "params": { "$ref": "#/$defs/handoff_continue_params" }
+      }
+    },
+    "handoff_resume_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "method", "params"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "handoff.resume" },
+        "params": { "$ref": "#/$defs/handoff_resume_params" }
+      }
+    },
+    "handoff_verify_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "method", "params"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "handoff.verify" },
+        "params": { "$ref": "#/$defs/handoff_verify_params" }
+      }
+    },
+    "hook_stop_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "method", "params"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "hook.stop" },
+        "params": { "$ref": "#/$defs/hook_stop_params" }
+      }
+    },
+    "ping_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "method", "params"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "ping" },
+        "params": { "$ref": "#/$defs/ping_params" }
+      }
+    },
+
+    "session_bye_notification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "method", "params"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "method": { "const": "session.bye" },
+        "params": { "$ref": "#/$defs/session_bye_params" }
+      }
+    },
+    "handoff_detach_call_notification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "method", "params"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "method": { "const": "handoff.detach_call" },
+        "params": { "$ref": "#/$defs/handoff_detach_call_params" }
+      }
+    },
+    "handoff_event_notification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "method", "params"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "method": { "const": "handoff.event" },
+        "params": { "$ref": "#/$defs/handoff_event_params" }
+      }
+    },
+    "app_shutdown_notification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "method", "params"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "method": { "const": "app.shutdown" },
+        "params": { "$ref": "#/$defs/app_shutdown_params" }
+      }
+    },
+
+    "request": {
+      "oneOf": [
+        { "$ref": "#/$defs/hello_server_request" },
+        { "$ref": "#/$defs/hello_hook_request" },
+        { "$ref": "#/$defs/handoff_open_request" },
+        { "$ref": "#/$defs/handoff_continue_request" },
+        { "$ref": "#/$defs/handoff_resume_request" },
+        { "$ref": "#/$defs/handoff_verify_request" },
+        { "$ref": "#/$defs/hook_stop_request" },
+        { "$ref": "#/$defs/ping_request" }
+      ]
+    },
+    "notification": {
+      "oneOf": [
+        { "$ref": "#/$defs/session_bye_notification" },
+        { "$ref": "#/$defs/handoff_detach_call_notification" },
+        { "$ref": "#/$defs/handoff_event_notification" },
+        { "$ref": "#/$defs/app_shutdown_notification" }
+      ]
+    },
+    "response": {
+      "description": "A response carries no method, so the result shape identifies it. The seven results are mutually exclusive by their required fields.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "result"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "id": { "$ref": "#/$defs/id" },
+        "result": {
+          "oneOf": [
+            { "$ref": "#/$defs/hello_result" },
+            { "$ref": "#/$defs/handoff_open_result" },
+            { "$ref": "#/$defs/handoff_continue_result" },
+            { "$ref": "#/$defs/handoff_resume_result" },
+            { "$ref": "#/$defs/handoff_verify_result" },
+            { "$ref": "#/$defs/hook_stop_result" },
+            { "$ref": "#/$defs/ping_result" }
+          ]
+        }
+      }
+    },
+
+    "error_auth_failed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "const": -32001 },
+        "message": { "const": "auth_failed" }
+      }
+    },
+    "error_protocol_unsupported": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "data"],
+      "properties": {
+        "code": { "const": -32002 },
+        "message": { "const": "protocol_unsupported" },
+        "data": {
+          "description": "The version the app speaks, so the peer can log what it should update to (§6.5).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["protocol_version"],
+          "properties": { "protocol_version": { "$ref": "#/$defs/protocol_version_current" } }
+        }
+      }
+    },
+    "error_unknown_value_key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "data"],
+      "properties": {
+        "code": { "const": -32010 },
+        "message": { "const": "unknown_value_key" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["keys"],
+          "properties": {
+            "keys": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/value_name" }
+            }
+          }
+        }
+      }
+    },
+    "error_not_waiting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "const": -32011 },
+        "message": { "const": "not_waiting" }
+      }
+    },
+    "error_final": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "const": -32012 },
+        "message": { "const": "final" }
+      }
+    },
+    "error_no_verify_in_spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "const": -32013 },
+        "message": { "const": "no_verify_in_spec" }
+      }
+    },
+    "error_not_found": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "const": -32014 },
+        "message": { "const": "not_found" }
+      }
+    },
+    "error_response": {
+      "description": "The message field carries the error name of §6.3; the numeric code is the wire form. A malformed or unknown message is not answered with an error object: the connection closes (§6.3).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "error"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/$defs/jsonrpc" },
+        "id": { "$ref": "#/$defs/id" },
+        "error": {
+          "oneOf": [
+            { "$ref": "#/$defs/error_auth_failed" },
+            { "$ref": "#/$defs/error_protocol_unsupported" },
+            { "$ref": "#/$defs/error_unknown_value_key" },
+            { "$ref": "#/$defs/error_not_waiting" },
+            { "$ref": "#/$defs/error_final" },
+            { "$ref": "#/$defs/error_no_verify_in_spec" },
+            { "$ref": "#/$defs/error_not_found" }
+          ]
+        }
+      }
+    }
+  }
+}

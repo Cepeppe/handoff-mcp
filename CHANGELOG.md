@@ -11,6 +11,14 @@ schema version, which is independent of the package version.
 
 ### Added
 
+- Definition of the internal server-to-app channel in `protocol/channel/`: a JSON Schema
+  covering every method, its params and its result, the JSON-RPC envelope and the error
+  codes; a `protocol_version` file holding the single integer both peers compare for
+  equality; and a README carrying the "internal, subject to change without notice" notice,
+  the transport, the connection lifecycle and the declared threat model.
+- Golden channel sequences in `fixtures/channel/*.jsonl`, one per flow, replayed by both
+  test doubles, and a contract test that validates every line, requires every method to
+  appear and checks that the sequences answer the requests they contain.
 - Public certain-secret patterns in `patterns/certain-secrets.v1.json`: sixteen families
   with their own match and counter-example lists, the shared English and Italian stop-word
   lists used by runbook matching, and notes explaining the regex subset that JavaScript and

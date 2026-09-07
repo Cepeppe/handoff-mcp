@@ -1,0 +1,4 @@
+{"dir":"→","msg":{"jsonrpc":"2.0","id":1,"method":"hello","params":{"protocol_version":1,"token":"c0ffee11d0d0f00d1234567890abcdef00112233445566778899aabbccddeeff","role":"hook","identity":{"pid":50310,"ppid":48190,"ancestors":[],"cwd":"/Users/g/dev/shop"},"hook":{"session_id":"0b1e7c94-6f3a-4d21-9f0c-2ab5e8d17c43","hook_event_name":"Stop","stop_hook_active":false}}}}
+{"dir":"←","msg":{"jsonrpc":"2.0","id":1,"result":{"app_version":"1.0.0","protocol_version":1,"session_ref":null}}}
+{"dir":"→","msg":{"jsonrpc":"2.0","id":2,"method":"hook.stop","params":{}}}
+{"dir":"←","msg":{"jsonrpc":"2.0","id":2,"result":{"block":true,"reason":"Handoff hf_7k3m9p2q4r (Register the Stripe webhook for payment events) is awaiting your verification report: perform its verify and call handoff_verify."}}}
