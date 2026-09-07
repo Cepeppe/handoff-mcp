@@ -1,0 +1,49 @@
+{
+  "name": "baton-handoff-mcp",
+  "version": "0.0.0",
+  "description": "Contextual handoff MCP server: public spec/outcome/runbook formats and reference server",
+  "license": "MIT",
+  "author": "Cepeppe",
+  "type": "module",
+  "bin": {
+    "handoff-mcp": "dist/handoff-mcp.cjs"
+  },
+  "files": [
+    "dist/",
+    "schemas/",
+    "patterns/",
+    "docs/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.17.0",
+  "scripts": {
+    "build": "node build/bundle.mjs",
+    "test": "vitest run",
+    "test:contract": "vitest run --dir test/contract --passWithNoTests",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.1",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.10.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "^5.0.0"
+  }
+}
