@@ -12,15 +12,24 @@
  * `secret_treated`, the five application error codes — are asserted here directly, and so
  * are the mutations the schema must reject: a validator that accepts everything passes a
  * fixture suite silently.
+ *
+ * The last block closes the loop for the real peer: what `src/channel/client.ts` actually
+ * writes on a connection is validated against the same schema, so the client cannot drift
+ * from the protocol it claims to speak while every fixture stays green (T-018).
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { Duplex } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
 import Ajv2020 from 'ajv/dist/2020.js';
 import type { AnySchema, ErrorObject, ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
 import { describe, expect, it } from 'vitest';
+
+import { ChannelClient, PROTOCOL_VERSION, encodeMessage, success } from '../../src/channel';
+import { createLogger } from '../../src/log';
+import type { Endpoint, TokenRead } from '../../src/platform';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const PROTOCOL = join(ROOT, 'protocol', 'channel');
@@ -420,5 +429,96 @@ describe('shapes no golden flow carries', () => {
       params: { ...params(hook), capability_row: { agent_id: 'claude-code' } },
     });
     rejects({ ...hook, params: { ...params(hook), token: TOKEN.toUpperCase() } });
+  });
+});
+
+/**
+ * A socket the test drives by hand: what the client writes is recorded, what the test
+ * pushes arrives as if the app had sent it. `allowHalfOpen: false` makes `end()` close the
+ * whole thing, which is what a real socket does and what lets `close()` finish at once.
+ */
+class Loopback extends Duplex {
+  readonly written: string[] = [];
+
+  constructor() {
+    super({ allowHalfOpen: false });
+  }
+
+  override _read(): void {
+    // The test pushes.
+  }
+
+  override _write(chunk: Buffer, _encoding: string, done: (error?: Error) => void): void {
+    this.written.push(chunk.toString('utf8'));
+    done();
+  }
+
+  override _final(done: (error?: Error) => void): void {
+    this.push(null);
+    done();
+  }
+}
+
+const settle = (): Promise<void> => new Promise<void>((resolve) => setImmediate(resolve));
+
+describe('what the client puts on the wire', () => {
+  it('speaks the version the schema pins and the protocol_version file repeats', () => {
+    const defs = channelSchema['$defs'] as Record<string, JsonObject>;
+    expect(PROTOCOL_VERSION).toBe(defs['protocol_version_current']?.['const']);
+  });
+
+  it('sends a hello, a ping answer and a session.bye the schema accepts', async () => {
+    const socket = new Loopback();
+    const client = new ChannelClient({
+      identity: {
+        pid: 48211,
+        ppid: 48190,
+        ancestors: [{ pid: 48190, name: 'node' }],
+        cwd: '/Users/g/dev/shop',
+        project_dir: '/Users/g/dev/shop',
+      },
+      agentId: 'claude-code',
+      client: { name: 'claude-code', version: '2.1.211' },
+      capabilityRow: {
+        agent_id: 'claude-code',
+        display_name: 'Claude Code',
+        support: 'full',
+        images_in_results: true,
+        stop_hook: true,
+        tool_timeout_ms: 1_800_000,
+      },
+      serverVersion: '1.0.3',
+      logger: createLogger('error', () => undefined),
+      endpoint: (): Endpoint => ({ kind: 'unix', path: '/tmp/handoff/app.sock' }),
+      token: (): TokenRead => ({ ok: true, token: TOKEN }),
+      connect: () => socket,
+    });
+
+    client.start();
+    await settle();
+    socket.push(
+      encodeMessage(
+        success(1, { app_version: '1.0.0', protocol_version: 1, session_ref: 'ses_4m7q2t9x' }),
+      ),
+    );
+    await settle();
+    expect(client.isConnected()).toBe(true);
+
+    socket.push(encodeMessage({ jsonrpc: '2.0', id: 100, method: 'ping', params: {} }));
+    await settle();
+    await client.close();
+
+    const written = socket.written
+      .join('')
+      .split('\n')
+      .filter((line) => line !== '');
+    expect(written).toHaveLength(3);
+    for (const line of written) accepts(JSON.parse(line));
+
+    const [hello, pong, bye] = written.map((line) => JSON.parse(line) as JsonObject);
+    expect(methodOf(hello ?? {})).toBe('hello');
+    expect(params(hello ?? {})['role']).toBe('server');
+    expect(pong).toEqual({ jsonrpc: '2.0', id: 100, result: {} });
+    expect(methodOf(bye ?? {})).toBe('session.bye');
   });
 });

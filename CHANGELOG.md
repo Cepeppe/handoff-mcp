@@ -63,6 +63,31 @@ schema version, which is independent of the package version.
 - `test/unit/mcp/` drives all of this over the SDK's in-memory transport, which validates
   every answer against the registered output schema, and `test/contract/mcp-tools.test.ts`
   compiles those schemas and runs the fourteen published outcome fixtures through them.
+- The paths the server and the overlay application share, computed the same way on both
+  sides: `~/.handoff/` with the runbook folder, the token file, the Unix socket and the
+  pointer file the application writes when the socket path does not fit in a `sun_path`,
+  and on Windows the named pipe `\\.\pipe\handoff-<h>`, whose suffix is the SHA-256 of the
+  lower-cased `USERDOMAIN\USERNAME` — plus `HANDOFF_HOME` when it is set, so a test instance
+  can never meet the application the user is running.
+- The channel token file, re-read at every connection attempt so that a token regenerated
+  by a repair is picked up without restarting the agent. A POSIX mode wider than `0600`
+  warns once on stderr and connects anyway; a token that is missing, unreadable or
+  malformed is reported as `CHANNEL_AUTH_FAILED`, the same state a rejected one produces.
+- The ancestor chain, resolved per platform as the design allocates it: one capped `ps`
+  spawn on macOS, `/proc` on Linux, and nothing at all on Windows, where the application
+  completes the chain itself from its native process table.
+- The channel client: NDJSON framing with the 16 MiB cap, the JSON-RPC 2.0 envelopes,
+  `hello` with the identity payload, and the connection lifecycle — the 1, 2, 5, 10, 30
+  second backoff that never gives up, one attempt every five minutes after a version
+  mismatch, a ping after thirty seconds of silence with two unanswered pings meaning the
+  connection is dead, the 10 second timeout on non-blocking requests, `app.shutdown` and
+  `session.bye`. Nothing is wired into the tool pipeline yet: `serve` still answers in text
+  mode until the blocking calls arrive.
+- `test/unit/channel/` and `test/unit/platform/` pin all of it — the pipe digest as a
+  literal value the application has to reproduce, every line of every golden channel
+  sequence round-tripped through the codec and cut at each byte boundary, the schedules on
+  a fake clock, the client over a real pipe or socket — and `test/contract/channel.test.ts`
+  now validates what the client actually writes against the published channel schema.
 
 ## [0.1.0] - 2026-09-07
 

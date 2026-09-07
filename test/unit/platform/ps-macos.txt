@@ -1,0 +1,8 @@
+    1     0 /sbin/launchd
+  400     1 /usr/libexec/UserEventAgent
+  512     1 /Library/Application Support/Vendor/Helper Daemon
+ 9100     1 /Applications/iTerm.app/Contents/MacOS/iTerm2
+ 9120  9100 /bin/zsh
+48190  9120 /usr/local/bin/node
+48211 48190 /usr/local/bin/node
+50310 48190 /usr/local/bin/node

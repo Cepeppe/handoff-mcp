@@ -29,14 +29,18 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { homeDir, type EnvRecord } from '../config';
+import type { EnvRecord } from '../config';
 import { catalogueError, type HandoffError } from '../format/errors';
+import { runbooksDir } from '../platform/paths';
 
 import { SUPPORTED_RUNBOOK_VERSION, validateRunbookSchema } from './schema';
 import type { Runbook, StoredRunbook } from './types';
 
-/** The folder under `~/.handoff/` that holds the runbook files (RUN-03a). */
-export const RUNBOOKS_FOLDER_NAME = 'runbooks';
+/**
+ * The folder under `~/.handoff/` that holds the runbook files (RUN-03a). It is named in
+ * `src/platform/paths.ts`, with every other path the two peers have to agree on.
+ */
+export { RUNBOOKS_FOLDER_NAME } from '../platform/paths';
 
 /** Only files ending in this are considered; anything else in the folder is ignored. */
 const RUNBOOK_FILE_SUFFIX = '.json';
@@ -57,7 +61,7 @@ export type RunbookRead =
 
 /** The roots the server is configured with: exactly one, `~/.handoff/runbooks/` (§12.3). */
 export function defaultRunbookRoots(env?: EnvRecord): readonly string[] {
-  return [join(homeDir(env), RUNBOOKS_FOLDER_NAME)];
+  return [runbooksDir(env)];
 }
 
 /** The `code` of a Node system error, when it has one. */

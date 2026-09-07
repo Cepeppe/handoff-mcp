@@ -10,7 +10,14 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { ENV_VAR_NAMES, homeDir, readConfig, type EnvRecord } from '../../src/config';
+import {
+  ENV_VAR_NAMES,
+  homeDir,
+  homeOverride,
+  readConfig,
+  windowsUserKey,
+  type EnvRecord,
+} from '../../src/config';
 
 const CWD = join('C', 'dev', 'shop');
 
@@ -19,7 +26,7 @@ function config(env: EnvRecord) {
 }
 
 describe('the declared variables', () => {
-  it('are the six of §5.3, in that order', () => {
+  it('are the six of §5.3 in that order, then the two Windows names the pipe is built from', () => {
     expect(ENV_VAR_NAMES).toEqual([
       'HANDOFF_AGENT',
       'HANDOFF_TOOL_TIMEOUT_MS',
@@ -27,6 +34,8 @@ describe('the declared variables', () => {
       'HANDOFF_HOME',
       'CLAUDE_PROJECT_DIR',
       'HANDOFF_MCP_LOG',
+      'USERDOMAIN',
+      'USERNAME',
     ]);
   });
 });
@@ -136,5 +145,31 @@ describe('reading is pure', () => {
     const env = { HANDOFF_AGENT: 'codex', HANDOFF_MCP_LOG: 'debug' };
     config(env);
     expect(env).toEqual({ HANDOFF_AGENT: 'codex', HANDOFF_MCP_LOG: 'debug' });
+  });
+});
+
+describe('the Windows identity the pipe is named after', () => {
+  it('is USERDOMAIN\\USERNAME in lower case (§5.8, DD-26)', () => {
+    expect(windowsUserKey({ USERDOMAIN: 'ACME', USERNAME: 'Giuse' })).toBe('acme\\giuse');
+  });
+
+  it('lets a variable that is not set contribute an empty string, never a substitute', () => {
+    // The app derives the same name from the same two variables; a fallback taken from
+    // somewhere else on one side would move the endpoint out from under the other.
+    expect(windowsUserKey({})).toBe('\\');
+    expect(windowsUserKey({ USERNAME: 'Giuse' })).toBe('\\giuse');
+    expect(windowsUserKey({ USERDOMAIN: '  ', USERNAME: 'giuse' })).toBe('\\giuse');
+  });
+});
+
+describe('the home override', () => {
+  it('is the trimmed value of HANDOFF_HOME, and the folder agrees with it', () => {
+    expect(homeOverride({ HANDOFF_HOME: '  /tmp/h  ' })).toBe('/tmp/h');
+    expect(homeDir({ HANDOFF_HOME: '  /tmp/h  ' })).toBe('/tmp/h');
+  });
+
+  it('is undefined when the variable is unset or blank', () => {
+    expect(homeOverride({})).toBeUndefined();
+    expect(homeOverride({ HANDOFF_HOME: '   ' })).toBeUndefined();
   });
 });
