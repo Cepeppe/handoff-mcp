@@ -3,7 +3,7 @@
   "handoff_id": "hf_7k3m9p2q4r",
   "status": "in_progress",
   "final": false,
-  "instruction": "The user is still working. Call handoff_to_user with resume=hf_7k3m9p2q4r now to keep waiting.",
+  "instruction": "The user is still working on this handoff. This is not the end of it: call handoff_to_user again now with {\"resume\": \"hf_7k3m9p2q4r\"} to keep waiting.",
   "round": 1,
   "current_step": {
     "index": 2,

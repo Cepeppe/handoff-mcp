@@ -3,7 +3,7 @@
   "handoff_id": "hf_7k3m9p2q4r",
   "status": "transferred_to_other_session",
   "final": false,
-  "instruction": "Another session took over hf_7k3m9p2q4r. Do nothing further with it.",
+  "instruction": "Another session took over handoff hf_7k3m9p2q4r and now receives its outcome. Do nothing further with it.",
   "round": 1,
   "current_step": {
     "index": 2,

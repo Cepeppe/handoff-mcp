@@ -3,7 +3,7 @@
   "handoff_id": "hf_7k3m9p2q4r",
   "status": "parked",
   "final": false,
-  "instruction": "Do not resume now. The handoff stays in the overlay; mention hf_7k3m9p2q4r as pending in your final summary.",
+  "instruction": "The user deferred this step twice. Do not resume it now: it stays in the overlay until the user picks it up. Mention hf_7k3m9p2q4r as still pending in your final summary. The Stop hook will stop you once if you forget.",
   "round": 1,
   "current_step": {
     "index": 2,

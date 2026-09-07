@@ -3,7 +3,7 @@
   "handoff_id": "hf_7k3m9p2q4r",
   "status": "confirmed_by_user",
   "final": true,
-  "instruction": "The handoff is complete and recorded as confirmed by the user.",
+  "instruction": "The handoff is complete and recorded as confirmed by the user. Nothing further is expected for hf_7k3m9p2q4r.",
   "round": 1,
   "current_step": {
     "index": 4,

@@ -21,7 +21,8 @@
   },
   "packageManager": "pnpm@11.17.0",
   "scripts": {
-    "build": "node build/bundle.mjs",
+    "gen": "node build/gen-contract.mjs",
+    "build": "node build/gen-contract.mjs && node build/bundle.mjs",
     "test": "vitest run",
     "test:contract": "vitest run test/contract",
     "lint": "eslint .",

@@ -3,7 +3,7 @@
   "handoff_id": null,
   "status": "runbook_match",
   "final": false,
-  "instruction": "A runbook exists: start from here? Fill values_to_fill and call handoff_to_user again with the completed spec and ignore_runbook=true.",
+  "instruction": "No handoff was opened. A saved runbook already covers this kind of work: start from it. Fill values_to_fill from the current project and call handoff_to_user again with the completed spec and ignore_runbook set to true. If none of the runbooks fits, call again with your own spec and the same flag.",
   "round": 1,
   "current_step": null,
   "user_text": null,

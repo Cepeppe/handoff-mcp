@@ -1,15 +1,22 @@
 # Public schemas
 
-Three JSON Schemas (draft 2020-12), published under MIT with the server. They are a public
-promise: any agent can produce a spec against `handoff-spec.v1`, any client can read an
-outcome against `handoff-outcome.v1`, and anyone can read the runbook files the app writes
-in `~/.handoff/runbooks/` against `handoff-runbook.v1`.
+Three JSON Schemas (draft 2020-12) and the tool contract, published under MIT with the
+server. They are a public promise: any agent can produce a spec against `handoff-spec.v1`,
+any client can read an outcome against `handoff-outcome.v1`, and anyone can read the runbook
+files the app writes in `~/.handoff/runbooks/` against `handoff-runbook.v1`.
 
 | File                             | Who produces it                                                     | Who reads it                                         |
 | -------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------- |
 | `handoff-spec.v1.schema.json`    | The agent, as the input of `handoff_to_user`                        | The server validates it, the overlay shows it        |
 | `handoff-outcome.v1.schema.json` | The server, as the result of `handoff_to_user` and `handoff_verify` | The agent branches on `status`; the log stores it    |
 | `handoff-runbook.v1.schema.json` | The overlay, one file per saved recipe                              | The server, which converts it back into a draft spec |
+
+`tool-contract.v1.md` sits next to them and is the fourth public document: the input schema,
+the description text and the annotations of each of the three MCP tools, the exact
+`instruction` sentence of every outcome status, and the error catalogue. It is normative and
+machine-read — `build/gen-contract.mjs` turns it into `src/mcp/generated/contract.ts`, which
+is what the server actually sends — so the published texts and the texts an agent receives
+cannot drift.
 
 Each schema has a stable `$id` under
 `https://raw.githubusercontent.com/Cepeppe/handoff-mcp/main/schemas/`. The `$id` is an

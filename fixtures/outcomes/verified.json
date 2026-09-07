@@ -3,7 +3,7 @@
   "handoff_id": "hf_7k3m9p2q4r",
   "status": "verified",
   "final": true,
-  "instruction": "Recorded as verified; a runbook was saved.",
+  "instruction": "Recorded as verified, and a runbook was saved so the next run of this work can start from it. Nothing further is expected for hf_7k3m9p2q4r.",
   "round": 1,
   "current_step": {
     "index": 4,

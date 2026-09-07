@@ -3,7 +3,7 @@
   "handoff_id": "hf_7k3m9p2q4r",
   "status": "abandoned",
   "final": true,
-  "instruction": "The user abandoned this handoff. Do not retry the same steps; ask the user how to proceed.",
+  "instruction": "The user abandoned handoff hf_7k3m9p2q4r. Do not retry the same steps and do not open a new handoff for the same goal: ask the user how they want to proceed.",
   "round": 1,
   "current_step": {
     "index": 2,

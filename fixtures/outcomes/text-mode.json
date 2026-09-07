@@ -3,7 +3,7 @@
   "handoff_id": null,
   "status": "text_mode",
   "final": false,
-  "instruction": "The overlay app is not running. Present the spec below to the user in chat, walk them through the steps, and collect the result in chat. No log or verified state exists in this mode.",
+  "instruction": "The overlay app is not running. Present the spec in spec_text to the user in chat, walk them through the steps one at a time, and collect the result in chat. Nothing is logged and no verified state exists in this mode: there is no handoff to resume and no verification to report.",
   "round": 1,
   "current_step": null,
   "user_text": null,

@@ -3,7 +3,7 @@
   "handoff_id": "hf_7k3m9p2q4r",
   "status": "awaiting_verification",
   "final": false,
-  "instruction": "Perform the verification below with your own tools, then call handoff_verify with ok true, false or null and a detail. Never read values listed in secrets.",
+  "instruction": "The user finished the steps and the spec asked for a verification. Perform it yourself with your own tools, then report it: call handoff_verify with handoff_id hf_7k3m9p2q4r, verify.ok set to true, false or null, and a verify.detail saying exactly what you ran and what you observed. Never read the values listed in secrets: check their presence or their effect only.",
   "round": 1,
   "current_step": {
     "index": 4,

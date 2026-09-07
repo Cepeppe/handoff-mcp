@@ -3,7 +3,7 @@
   "handoff_id": "hf_7k3m9p2q4r",
   "status": "deferred",
   "final": false,
-  "instruction": "Park this step, continue work that does not depend on it, then call handoff_to_user with resume=hf_7k3m9p2q4r before you conclude.",
+  "instruction": "The user deferred this step. Park it, continue work that does not depend on it, then call handoff_to_user with {\"resume\": \"hf_7k3m9p2q4r\"} before you conclude your turn. The Stop hook will stop you once if you forget.",
   "round": 1,
   "current_step": {
     "index": 2,

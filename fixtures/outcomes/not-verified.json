@@ -3,7 +3,7 @@
   "handoff_id": "hf_7k3m9p2q4r",
   "status": "not_verified",
   "final": true,
-  "instruction": "Recorded as not verified. If you can still verify, call handoff_verify; a late report is accepted.",
+  "instruction": "Recorded as not verified. If you can still verify it, call handoff_verify with handoff_id hf_7k3m9p2q4r: a late report is accepted for seven days and is recorded as late.",
   "round": 1,
   "current_step": {
     "index": 4,

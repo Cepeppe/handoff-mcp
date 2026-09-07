@@ -3,7 +3,7 @@
   "handoff_id": "hf_7k3m9p2q4r",
   "status": "question",
   "final": false,
-  "instruction": "Answer on the current step: call handoff_to_user with handoff_id and reply; add replacement_steps only if the remaining steps must change.",
+  "instruction": "The user asked a question on the current step. Answer it: call handoff_to_user with {\"handoff_id\": \"hf_7k3m9p2q4r\", \"reply\": \"your answer\"}. Add replacement_steps only if the remaining steps must change.",
   "round": 1,
   "current_step": {
     "index": 2,

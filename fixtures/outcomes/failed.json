@@ -3,7 +3,7 @@
   "handoff_id": "hf_7k3m9p2q4r",
   "status": "failed",
   "final": true,
-  "instruction": "If you can correct it, call handoff_to_user with handoff_id and replacement_steps that start from the actual error; otherwise tell the user.",
+  "instruction": "The verification failed. If you can correct it, call handoff_to_user with handoff_id hf_7k3m9p2q4r and replacement_steps that start from the actual error; otherwise tell the user what went wrong and stop.",
   "round": 1,
   "current_step": {
     "index": 4,

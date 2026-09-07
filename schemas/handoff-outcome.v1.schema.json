@@ -60,7 +60,7 @@
       "type": "boolean"
     },
     "instruction": {
-      "description": "What the agent should do next. The fallback that holds when hooks, raised timeouts or images do not. Exact texts live in docs/tool-contract.v1.md.",
+      "description": "What the agent should do next. The fallback that holds when hooks, raised timeouts or images do not. Exact texts live in tool-contract.v1.md, next to this schema.",
       "type": "string",
       "minLength": 1
     },
