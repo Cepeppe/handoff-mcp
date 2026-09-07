@@ -6,8 +6,10 @@ name: SEA
 #
 # macOS is deferred (TASKS.md §0.4 item 7) and its minutes cost 10x, so the two darwin
 # legs run only when they are dispatched by hand. The Intel runner label is a dispatch
-# input because that image is the one most likely to be retired from under us; if the
-# default disappears, dispatch again with another label instead of editing this file.
+# input because that image is the one that gets retired from under us: `macos-13`, which
+# the design-era documentation still names, no longer receives a runner at all — a job
+# asking for it stays queued until it times out. If `macos-15-intel` goes the same way,
+# dispatch again with the current label instead of editing this file.
 
 on:
   push:
@@ -16,7 +18,7 @@ on:
     inputs:
       macos_x64_runner:
         description: Runner label for the darwin-x64 leg
-        default: macos-13
+        default: macos-15-intel
         required: false
 
 permissions:

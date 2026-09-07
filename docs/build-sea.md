@@ -100,13 +100,21 @@ for its JIT, so the app's signing step must carry:
 
 The macOS legs of `sea.yml` are dispatch-only while macOS is deferred, so those
 entitlements are unverified against real notarization: that is assumption **A-12**, and
-T-060 closes it.
+T-060 closes it. What is verified is the half A-12 can be verified without a Mac: both
+darwin assets build, ad-hoc sign and pass the smoke test on GitHub runners.
+
+**The Intel runner label moves.** `macos-13` no longer receives a runner — a job asking for
+it stays queued until it times out, with no error to read. The `darwin-x64` leg therefore
+takes its label from the `macos_x64_runner` dispatch input, currently `macos-15-intel`. If
+that one is retired too, dispatch with the current label rather than editing the workflow.
 
 ## Known limitations
 
-- **Size.** 88.4 MB on Windows with Node 24.18.0 — the design's estimate of 90–110 MB
-  holds. It is the Node runtime; the server bundle itself is a few kilobytes. Compression
-  is not applied: the file is a real executable and the app bundles exactly one copy.
+- **Size.** Measured on 2026-09-07 with Node 24.18.0: 88.4 MB for `win32-x64`, 115.4 MB for
+  `darwin-arm64`, 117.7 MB for `darwin-x64`. The design's estimate of 90–110 MB holds for
+  Windows and is a little low for macOS. It is the Node runtime; the server bundle itself
+  is a few kilobytes. Compression is not applied: the file is a real executable and the app
+  bundles exactly one copy.
 - **Experimental banner.** Node prints _"Single executable application is an experimental
   feature"_ on stderr at every start unless it is suppressed. `sea-config.json` sets
   `disableExperimentalSEAWarning: true`, which matters more than cosmetics here: the server
