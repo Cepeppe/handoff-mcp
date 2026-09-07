@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Cepeppe/handoff-mcp/main/schemas/handoff-spec.v1.schema.json",
+  "title": "Handoff spec v1",
+  "description": "The JSON document an agent produces to hand a unit of work to the person at the machine. Structure only: emptiness after trimming, placeholders, control fields and unknown value keys are semantic rules applied after this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec_version", "goal", "where", "why_human", "values", "steps"],
+  "properties": {
+    "spec_version": {
+      "description": "Format version. The version check runs before this schema, so a higher version is answered with an update instruction rather than a list of unknown fields.",
+      "type": "integer",
+      "const": 1
+    },
+    "goal": {
+      "description": "What must be achieved.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "where": {
+      "description": "Where to act: a service, an application or an OS settings panel, with page or section.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "url": {
+      "description": "Starting point openable with one click.",
+      "$ref": "#/$defs/url"
+    },
+    "why_human": {
+      "description": "Why a person performs this work.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "values": {
+      "description": "Values to use, taken from the project. Keys are user-defined. May be empty.",
+      "type": "object",
+      "maxProperties": 50,
+      "propertyNames": { "$ref": "#/$defs/value_name" },
+      "additionalProperties": { "$ref": "#/$defs/value" }
+    },
+    "secrets": {
+      "description": "Variable name to destination file, for values the user copies from the external service into a project file. Values never appear here.",
+      "type": "object",
+      "maxProperties": 20,
+      "propertyNames": { "type": "string", "minLength": 1, "maxLength": 128 },
+      "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 1024 }
+    },
+    "steps": {
+      "description": "Ordered steps, shown one at a time.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "verify": {
+      "description": "The check the agent performs itself after the user is done. Must never read a value listed in secrets.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "lang": {
+      "description": "BCP-47 language tag of the texts, a hint for OCR and runbooks.",
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+    }
+  },
+  "$defs": {
+    "url": {
+      "description": "Closed list of schemes: http, https, ms-settings:, x-apple.systempreferences:.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^(https?://|ms-settings:|x-apple\\.systempreferences:)"
+    },
+    "value_name": {
+      "description": "A key of the top-level values map.",
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_.-]{0,63}$"
+    },
+    "value": {
+      "description": "A single value or a list of values. Empty strings pass the schema and are rejected by the semantic rules, which is what makes a draft spec derived from a runbook invalid until the agent fills it.",
+      "anyOf": [
+        { "type": "string", "maxLength": 4096 },
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": { "type": "string", "maxLength": 4096 }
+        }
+      ]
+    },
+    "step": {
+      "description": "A step is always an object; strings with placeholders are not accepted.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "url": { "$ref": "#/$defs/url" },
+        "values": {
+          "description": "Keys into the top-level values map. Omitted, never empty, when the step uses no value.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/value_name" }
+        },
+        "warning": { "type": "string", "minLength": 1, "maxLength": 300 }
+      }
+    }
+  }
+}

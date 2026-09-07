@@ -23,7 +23,7 @@
   "scripts": {
     "build": "node build/bundle.mjs",
     "test": "vitest run",
-    "test:contract": "vitest run --dir test/contract --passWithNoTests",
+    "test:contract": "vitest run test/contract",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

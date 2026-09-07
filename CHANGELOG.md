@@ -11,6 +11,12 @@ schema version, which is independent of the package version.
 
 ### Added
 
+- Public JSON Schemas (draft 2020-12) for the handoff spec, the outcome and the runbook
+  file, with `schemas/README.md` describing the version rules, the limits and the rule
+  that placeholders exist only in runbooks.
+- Fixtures for the three formats, including one outcome per status and invalid specs
+  paired with the path and error code a validator must report, and a contract test that
+  compiles the schemas with Ajv in strict mode and checks every fixture.
 - TypeScript project scaffold: strict `tsconfig.json`, ESLint, Prettier, Vitest, and an
   esbuild bundle producing the single CommonJS file behind the `handoff-mcp` binary.
 - CLI entry routing the five subcommands (`serve`, `hook stop`, `validate`,

@@ -1,0 +1,77 @@
+{
+  "outcome_version": 1,
+  "handoff_id": null,
+  "status": "runbook_match",
+  "final": false,
+  "instruction": "A runbook exists: start from here? Fill values_to_fill and call handoff_to_user again with the completed spec and ignore_runbook=true.",
+  "round": 1,
+  "current_step": null,
+  "user_text": null,
+  "screenshot": null,
+  "context": null,
+  "skipped_steps": [],
+  "notes": [],
+  "secret_treated": [],
+  "verify": null,
+  "deferral_count": 0,
+  "resumed_from": null,
+  "app_reachable": true,
+  "already_delivered": false,
+  "runbooks": [
+    {
+      "id": "rb_2b9x4d7fkq",
+      "path": "C:\\Users\\me\\.handoff\\runbooks\\stripe-dashboard-developers-webhooks__register-the-stripe-webhook-for-payment-events__rb_2b9x4d7fkq.json",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "trust": "verified",
+      "last_verified_at": "2026-09-07T10:31:44Z",
+      "last_run_failed_at": null,
+      "runs": 1,
+      "matched_words": ["stripe", "webhook", "payment"],
+      "draft_spec": {
+        "spec_version": 1,
+        "goal": "Register the Stripe webhook for payment events",
+        "where": "Stripe Dashboard → Developers → Webhooks",
+        "url": "https://dashboard.stripe.com/webhooks",
+        "why_human": "Requires access to the production Stripe account.",
+        "values": {
+          "endpoint_url": "",
+          "events": ""
+        },
+        "secrets": {
+          "STRIPE_WEBHOOK_SECRET": ".env"
+        },
+        "steps": [
+          {
+            "text": "Click Add destination and paste [endpoint_url] as the endpoint URL.",
+            "values": ["endpoint_url"]
+          },
+          {
+            "text": "Select the events [events].",
+            "values": ["events"]
+          },
+          {
+            "text": "Save and copy the signing secret."
+          },
+          {
+            "text": "Paste it into .env as STRIPE_WEBHOOK_SECRET."
+          }
+        ],
+        "verify": "Check that STRIPE_WEBHOOK_SECRET exists in .env without reading its value, then send a test event and verify it reaches /webhooks/stripe with a valid signature.",
+        "lang": "en"
+      },
+      "values_to_fill": {
+        "endpoint_url": "Click Add destination and paste {{endpoint_url}} as the endpoint URL.",
+        "events": "Select the events {{events}}."
+      },
+      "annotations": [
+        {
+          "kind": "note",
+          "text": "Button is called 'Add destination' now",
+          "round": 1
+        }
+      ]
+    }
+  ],
+  "spec_text": null
+}

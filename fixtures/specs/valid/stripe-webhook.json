@@ -1,0 +1,32 @@
+{
+  "spec_version": 1,
+  "goal": "Register the Stripe webhook for payment events",
+  "where": "Stripe Dashboard → Developers → Webhooks",
+  "url": "https://dashboard.stripe.com/webhooks",
+  "why_human": "Requires access to the production Stripe account.",
+  "values": {
+    "endpoint_url": "https://api.myapp.example/webhooks/stripe",
+    "events": ["checkout.session.completed", "invoice.paid"]
+  },
+  "secrets": {
+    "STRIPE_WEBHOOK_SECRET": ".env"
+  },
+  "steps": [
+    {
+      "text": "Click Add endpoint and paste the endpoint URL.",
+      "values": ["endpoint_url"]
+    },
+    {
+      "text": "Select the events checkout.session.completed and invoice.paid.",
+      "values": ["events"]
+    },
+    {
+      "text": "Save and copy the signing secret."
+    },
+    {
+      "text": "Paste it into .env as STRIPE_WEBHOOK_SECRET."
+    }
+  ],
+  "verify": "Check that STRIPE_WEBHOOK_SECRET exists in .env without reading its value, then send a test event from the dashboard and verify it reaches /webhooks/stripe with a valid signature.",
+  "lang": "en"
+}

@@ -1,0 +1,74 @@
+{
+  "runbook_version": 1,
+  "id": "rb_5m8t3kc6bd",
+  "where": "Fly.io Dashboard → myapp → Secrets",
+  "goal": "Rotate the deploy key and restart the workers",
+  "why_human": "The rotation invalidates running sessions, so a person decides when it happens.",
+  "url": "https://fly.io/apps/myapp/secrets",
+  "lang": "en",
+  "values": {
+    "app": {
+      "description": "Open the secrets page of {{app}} and delete DEPLOY_KEY."
+    },
+    "region": {
+      "description": null
+    }
+  },
+  "secrets": {
+    "DEPLOY_KEY": ".env.production"
+  },
+  "steps": [
+    {
+      "text": "Open the secrets page of {{app}} and delete DEPLOY_KEY.",
+      "url": "https://fly.io/apps/myapp/secrets",
+      "values": ["app"],
+      "warning": null,
+      "annotations": [
+        {
+          "kind": "question",
+          "text": "Should I delete the staging key as well?",
+          "round": 1
+        },
+        {
+          "kind": "reply",
+          "text": "No, only the production one.",
+          "round": 1
+        },
+        {
+          "kind": "error",
+          "text": "The workers still answered with the old key fingerprint.",
+          "round": 1
+        }
+      ]
+    },
+    {
+      "text": "Restart every machine from the machines page, one at a time.",
+      "url": "https://fly.io/apps/myapp/machines",
+      "values": [],
+      "warning": "Restarting drops in-flight jobs; do it outside business hours.",
+      "annotations": [
+        {
+          "kind": "correction",
+          "text": "A restart is required for the new key to load.",
+          "round": 2
+        },
+        {
+          "kind": "note",
+          "text": "The second machine took about a minute to come back.",
+          "round": 2
+        }
+      ]
+    }
+  ],
+  "verify": "Call GET /healthz on every machine and check that all report the new key fingerprint.",
+  "trust": "verified",
+  "last_verified_at": "2026-09-07T16:20:09Z",
+  "last_run_failed_at": "2026-09-06T18:44:51Z",
+  "runs": 2,
+  "created_at": "2026-09-05T09:00:00Z",
+  "updated_at": "2026-09-07T16:20:09Z",
+  "origin": {
+    "app": "handoff-app",
+    "app_version": "1.0.0"
+  }
+}

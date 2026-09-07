@@ -1,0 +1,164 @@
+{
+  "spec_version": 1,
+  "goal": "Migrate every environment variable to the new secrets manager",
+  "where": "Vercel Dashboard → myapp → Settings → Environment Variables",
+  "url": "https://vercel.com/dashboard",
+  "why_human": "Each variable must be checked against the old vault by a person before it is moved.",
+  "values": {
+    "environment": "production"
+  },
+  "steps": [
+    {
+      "text": "Move variable 1 of 50 to the new manager and confirm the value matches the vault.",
+      "values": ["environment"]
+    },
+    {
+      "text": "Move variable 2 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 3 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 4 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 5 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 6 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 7 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 8 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 9 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 10 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 11 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 12 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 13 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 14 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 15 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 16 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 17 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 18 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 19 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 20 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 21 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 22 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 23 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 24 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 25 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 26 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 27 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 28 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 29 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 30 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 31 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 32 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 33 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 34 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 35 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 36 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 37 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 38 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 39 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 40 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 41 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 42 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 43 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 44 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 45 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 46 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 47 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 48 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 49 of 50 to the new manager and confirm the value matches the vault."
+    },
+    {
+      "text": "Move variable 50 of 50 to the new manager and confirm the value matches the vault."
+    }
+  ],
+  "verify": "Run `vercel env ls production` and check that it lists 50 variables."
+}

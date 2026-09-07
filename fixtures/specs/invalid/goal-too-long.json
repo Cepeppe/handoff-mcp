@@ -1,0 +1,12 @@
+{
+  "spec_version": 1,
+  "goal": "A goal of 301 characters: abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij abcdefghij ",
+  "where": "Stripe Dashboard → Developers → Webhooks",
+  "why_human": "Requires access to the production Stripe account.",
+  "values": {},
+  "steps": [
+    {
+      "text": "Click Add destination and paste the endpoint URL."
+    }
+  ]
+}

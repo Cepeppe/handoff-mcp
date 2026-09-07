@@ -1,0 +1,29 @@
+{
+  "outcome_version": 1,
+  "handoff_id": "hf_7k3m9p2q4r",
+  "status": "in_progress",
+  "final": false,
+  "instruction": "The user is still working. Call handoff_to_user with resume=hf_7k3m9p2q4r now to keep waiting.",
+  "round": 1,
+  "current_step": {
+    "index": 2,
+    "total": 4,
+    "text": "Select the events checkout.session.completed and invoice.paid."
+  },
+  "user_text": null,
+  "screenshot": null,
+  "context": null,
+  "skipped_steps": [],
+  "notes": [],
+  "secret_treated": [],
+  "verify": null,
+  "deferral_count": 0,
+  "resumed_from": {
+    "agent": "claude-code",
+    "project": "C:\\Users\\me\\projects\\api"
+  },
+  "app_reachable": true,
+  "already_delivered": false,
+  "runbooks": [],
+  "spec_text": null
+}

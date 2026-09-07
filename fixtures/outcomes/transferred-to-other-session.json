@@ -1,0 +1,26 @@
+{
+  "outcome_version": 1,
+  "handoff_id": "hf_7k3m9p2q4r",
+  "status": "transferred_to_other_session",
+  "final": false,
+  "instruction": "Another session took over hf_7k3m9p2q4r. Do nothing further with it.",
+  "round": 1,
+  "current_step": {
+    "index": 2,
+    "total": 4,
+    "text": "Select the events checkout.session.completed and invoice.paid."
+  },
+  "user_text": null,
+  "screenshot": null,
+  "context": null,
+  "skipped_steps": [],
+  "notes": [],
+  "secret_treated": [],
+  "verify": null,
+  "deferral_count": 0,
+  "resumed_from": null,
+  "app_reachable": true,
+  "already_delivered": false,
+  "runbooks": [],
+  "spec_text": null
+}

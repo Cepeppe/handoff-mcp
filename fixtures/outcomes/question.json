@@ -1,0 +1,39 @@
+{
+  "outcome_version": 1,
+  "handoff_id": "hf_7k3m9p2q4r",
+  "status": "question",
+  "final": false,
+  "instruction": "Answer on the current step: call handoff_to_user with handoff_id and reply; add replacement_steps only if the remaining steps must change.",
+  "round": 1,
+  "current_step": {
+    "index": 2,
+    "total": 4,
+    "text": "Select the events checkout.session.completed and invoice.paid."
+  },
+  "user_text": "Do I select the async payment events as well?",
+  "screenshot": null,
+  "context": {
+    "goal": "Register the Stripe webhook for payment events",
+    "where": "Stripe Dashboard → Developers → Webhooks",
+    "step": {
+      "index": 2,
+      "total": 4,
+      "text": "Select the events checkout.session.completed and invoice.paid.",
+      "url": null,
+      "warning": null
+    },
+    "step_values": {
+      "events": ["checkout.session.completed", "invoice.paid"]
+    }
+  },
+  "skipped_steps": [],
+  "notes": [],
+  "secret_treated": [],
+  "verify": null,
+  "deferral_count": 0,
+  "resumed_from": null,
+  "app_reachable": true,
+  "already_delivered": false,
+  "runbooks": [],
+  "spec_text": null
+}

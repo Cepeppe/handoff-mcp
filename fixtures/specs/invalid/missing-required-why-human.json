@@ -1,0 +1,11 @@
+{
+  "spec_version": 1,
+  "goal": "Register the Stripe webhook for payment events",
+  "where": "Stripe Dashboard → Developers → Webhooks",
+  "values": {},
+  "steps": [
+    {
+      "text": "Click Add destination and paste the endpoint URL."
+    }
+  ]
+}

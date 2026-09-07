@@ -1,0 +1,57 @@
+{
+  "spec_version": 1,
+  "goal": "Register the Stripe webhook for payment events",
+  "where": "Stripe Dashboard → Developers → Webhooks",
+  "why_human": "Requires access to the production Stripe account.",
+  "values": {
+    "value_1": "v1",
+    "value_2": "v2",
+    "value_3": "v3",
+    "value_4": "v4",
+    "value_5": "v5",
+    "value_6": "v6",
+    "value_7": "v7",
+    "value_8": "v8",
+    "value_9": "v9",
+    "value_10": "v10",
+    "value_11": "v11",
+    "value_12": "v12",
+    "value_13": "v13",
+    "value_14": "v14",
+    "value_15": "v15",
+    "value_16": "v16",
+    "value_17": "v17",
+    "value_18": "v18",
+    "value_19": "v19",
+    "value_20": "v20",
+    "value_21": "v21"
+  },
+  "steps": [
+    {
+      "text": "Click Add destination and paste the endpoint URL.",
+      "values": [
+        "value_1",
+        "value_2",
+        "value_3",
+        "value_4",
+        "value_5",
+        "value_6",
+        "value_7",
+        "value_8",
+        "value_9",
+        "value_10",
+        "value_11",
+        "value_12",
+        "value_13",
+        "value_14",
+        "value_15",
+        "value_16",
+        "value_17",
+        "value_18",
+        "value_19",
+        "value_20",
+        "value_21"
+      ]
+    }
+  ]
+}

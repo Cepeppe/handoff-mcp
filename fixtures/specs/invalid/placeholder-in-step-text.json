@@ -1,0 +1,12 @@
+{
+  "spec_version": 1,
+  "goal": "Register the Stripe webhook for payment events",
+  "where": "Stripe Dashboard → Developers → Webhooks",
+  "why_human": "Requires access to the production Stripe account.",
+  "values": {},
+  "steps": [
+    {
+      "text": "Paste {{endpoint_url}} into the Endpoint URL field."
+    }
+  ]
+}

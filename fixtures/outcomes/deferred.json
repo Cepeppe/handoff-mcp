@@ -1,0 +1,26 @@
+{
+  "outcome_version": 1,
+  "handoff_id": "hf_7k3m9p2q4r",
+  "status": "deferred",
+  "final": false,
+  "instruction": "Park this step, continue work that does not depend on it, then call handoff_to_user with resume=hf_7k3m9p2q4r before you conclude.",
+  "round": 1,
+  "current_step": {
+    "index": 2,
+    "total": 4,
+    "text": "Select the events checkout.session.completed and invoice.paid."
+  },
+  "user_text": "I need the finance team to unlock the account first.",
+  "screenshot": null,
+  "context": null,
+  "skipped_steps": [],
+  "notes": [],
+  "secret_treated": [],
+  "verify": null,
+  "deferral_count": 1,
+  "resumed_from": null,
+  "app_reachable": true,
+  "already_delivered": false,
+  "runbooks": [],
+  "spec_text": null
+}

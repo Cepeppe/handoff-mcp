@@ -1,0 +1,26 @@
+{
+  "outcome_version": 1,
+  "handoff_id": "hf_7k3m9p2q4r",
+  "status": "parked",
+  "final": false,
+  "instruction": "Do not resume now. The handoff stays in the overlay; mention hf_7k3m9p2q4r as pending in your final summary.",
+  "round": 1,
+  "current_step": {
+    "index": 2,
+    "total": 4,
+    "text": "Select the events checkout.session.completed and invoice.paid."
+  },
+  "user_text": "Still waiting for the finance team.",
+  "screenshot": null,
+  "context": null,
+  "skipped_steps": [],
+  "notes": [],
+  "secret_treated": [],
+  "verify": null,
+  "deferral_count": 2,
+  "resumed_from": null,
+  "app_reachable": true,
+  "already_delivered": false,
+  "runbooks": [],
+  "spec_text": null
+}

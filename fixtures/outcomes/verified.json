@@ -1,0 +1,31 @@
+{
+  "outcome_version": 1,
+  "handoff_id": "hf_7k3m9p2q4r",
+  "status": "verified",
+  "final": true,
+  "instruction": "Recorded as verified; a runbook was saved.",
+  "round": 1,
+  "current_step": {
+    "index": 4,
+    "total": 4,
+    "text": "Paste it into .env as STRIPE_WEBHOOK_SECRET."
+  },
+  "user_text": null,
+  "screenshot": null,
+  "context": null,
+  "skipped_steps": [],
+  "notes": [],
+  "secret_treated": [],
+  "verify": {
+    "ok": true,
+    "detail": "A test event reached /webhooks/stripe and the signature validated.",
+    "reported_at": "2026-09-07T10:31:44Z",
+    "late": false
+  },
+  "deferral_count": 0,
+  "resumed_from": null,
+  "app_reachable": true,
+  "already_delivered": false,
+  "runbooks": [],
+  "spec_text": null
+}

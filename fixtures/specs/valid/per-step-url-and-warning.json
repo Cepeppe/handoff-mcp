@@ -1,0 +1,26 @@
+{
+  "spec_version": 1,
+  "goal": "Rotate the deploy key and restart the workers",
+  "where": "Fly.io Dashboard → myapp → Secrets",
+  "url": "https://fly.io/apps/myapp/secrets",
+  "why_human": "The rotation invalidates running sessions, so a person decides when it happens.",
+  "values": {
+    "app": "myapp"
+  },
+  "steps": [
+    {
+      "text": "Delete the secret DEPLOY_KEY.",
+      "values": ["app"]
+    },
+    {
+      "text": "Open the machines page and restart every worker.",
+      "url": "https://fly.io/apps/myapp/machines",
+      "warning": "Restarting drops in-flight jobs; do it outside business hours."
+    },
+    {
+      "text": "Check Windows notification settings if the restart alert does not appear.",
+      "url": "ms-settings:notifications"
+    }
+  ],
+  "verify": "Call GET /healthz on every machine and check that all report the new key fingerprint."
+}

@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Cepeppe/handoff-mcp/main/schemas/handoff-runbook.v1.schema.json",
+  "title": "Handoff runbook v1",
+  "description": "A reusable recipe saved from a verified or user-confirmed handoff, one JSON file per runbook in ~/.handoff/runbooks/. The app writes it, the server reads it and converts it to a draft spec, so every copied or derived field carries the limits of handoff-spec.v1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runbook_version",
+    "id",
+    "where",
+    "goal",
+    "why_human",
+    "url",
+    "lang",
+    "values",
+    "secrets",
+    "steps",
+    "verify",
+    "trust",
+    "last_verified_at",
+    "last_run_failed_at",
+    "runs",
+    "created_at",
+    "updated_at",
+    "origin"
+  ],
+  "properties": {
+    "runbook_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "description": "Also part of the file name, which is <where-slug>__<goal-slug>__<id>.json.",
+      "type": "string",
+      "pattern": "^rb_[0-9a-hjkmnp-tv-z]{10}$"
+    },
+    "where": {
+      "description": "Copied from the spec of the last verified round; the matching rule normalises it.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "goal": { "type": "string", "minLength": 1, "maxLength": 300 },
+    "why_human": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "url": {
+      "anyOf": [{ "$ref": "#/$defs/url" }, { "type": "null" }]
+    },
+    "lang": {
+      "anyOf": [
+        { "type": "string", "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$" },
+        { "type": "null" }
+      ]
+    },
+    "values": {
+      "description": "Value names only, never values. The description is the text of the first step where the value appeared, with {{name}} in its place, or null when it appeared in no step.",
+      "type": "object",
+      "maxProperties": 50,
+      "propertyNames": { "$ref": "#/$defs/value_name" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description"],
+        "properties": {
+          "description": { "type": ["string", "null"], "maxLength": 2000 }
+        }
+      }
+    },
+    "secrets": {
+      "description": "Variable name to destination file, as in the spec. Names only.",
+      "type": "object",
+      "maxProperties": 20,
+      "propertyNames": { "type": "string", "minLength": 1, "maxLength": 128 },
+      "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 1024 }
+    },
+    "steps": {
+      "description": "The sequence actually executed, across rounds, with placeholders in place of values.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "verify": {
+      "anyOf": [{ "type": "string", "minLength": 1, "maxLength": 4000 }, { "type": "null" }]
+    },
+    "trust": {
+      "description": "verified when an agent reported ok, confirmed_by_user when the spec had no verify.",
+      "enum": ["verified", "confirmed_by_user"]
+    },
+    "last_verified_at": { "type": "string", "format": "date-time" },
+    "last_run_failed_at": {
+      "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
+    },
+    "runs": {
+      "description": "Verified or confirmed executions folded into this file; at least the one that created it.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app", "app_version"],
+      "properties": {
+        "app": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "app_version": { "type": "string", "minLength": 1, "maxLength": 64 }
+      }
+    }
+  },
+  "$defs": {
+    "url": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^(https?://|ms-settings:|x-apple\\.systempreferences:)"
+    },
+    "value_name": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_.-]{0,63}$"
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "url", "values", "warning", "annotations"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "url": {
+          "anyOf": [{ "$ref": "#/$defs/url" }, { "type": "null" }]
+        },
+        "values": {
+          "description": "Names of the placeholders used in this step. Empty is allowed here, unlike in a spec step.",
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/value_name" }
+        },
+        "warning": {
+          "anyOf": [{ "type": "string", "minLength": 1, "maxLength": 300 }, { "type": "null" }]
+        },
+        "annotations": {
+          "description": "What happened on this step: notes, the questions asked and their replies, a failed verification, the correction that followed.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "text", "round"],
+            "properties": {
+              "kind": { "enum": ["note", "question", "reply", "error", "correction"] },
+              "text": { "type": "string", "minLength": 1, "maxLength": 4000 },
+              "round": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

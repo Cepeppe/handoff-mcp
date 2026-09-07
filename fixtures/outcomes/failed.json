@@ -1,0 +1,31 @@
+{
+  "outcome_version": 1,
+  "handoff_id": "hf_7k3m9p2q4r",
+  "status": "failed",
+  "final": true,
+  "instruction": "If you can correct it, call handoff_to_user with handoff_id and replacement_steps that start from the actual error; otherwise tell the user.",
+  "round": 1,
+  "current_step": {
+    "index": 4,
+    "total": 4,
+    "text": "Paste it into .env as STRIPE_WEBHOOK_SECRET."
+  },
+  "user_text": null,
+  "screenshot": null,
+  "context": null,
+  "skipped_steps": [],
+  "notes": [],
+  "secret_treated": [],
+  "verify": {
+    "ok": false,
+    "detail": "The test event returned 400: the signature does not match the stored secret.",
+    "reported_at": "2026-09-07T10:31:44Z",
+    "late": false
+  },
+  "deferral_count": 0,
+  "resumed_from": null,
+  "app_reachable": true,
+  "already_delivered": false,
+  "runbooks": [],
+  "spec_text": null
+}

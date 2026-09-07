@@ -1,0 +1,20 @@
+{
+  "spec_version": 1,
+  "goal": "Attivare la fatturazione elettronica sul profilo aziendale",
+  "where": "Fatture in Cloud → Impostazioni → Fatturazione elettronica",
+  "url": "https://secure.fattureincloud.it",
+  "why_human": "L'attivazione richiede la firma del titolare con SPID.",
+  "values": {
+    "partita_iva": "01234567890"
+  },
+  "steps": [
+    {
+      "text": "Apri le impostazioni e inserisci la partita IVA.",
+      "values": ["partita_iva"]
+    },
+    {
+      "text": "Firma il mandato con SPID e attendi la conferma."
+    }
+  ],
+  "lang": "it"
+}

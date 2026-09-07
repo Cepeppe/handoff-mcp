@@ -1,0 +1,37 @@
+{
+  "outcome_version": 1,
+  "handoff_id": "hf_7k3m9p2q4r",
+  "status": "awaiting_verification",
+  "final": false,
+  "instruction": "Perform the verification below with your own tools, then call handoff_verify with ok true, false or null and a detail. Never read values listed in secrets.",
+  "round": 1,
+  "current_step": {
+    "index": 4,
+    "total": 4,
+    "text": "Paste it into .env as STRIPE_WEBHOOK_SECRET."
+  },
+  "user_text": null,
+  "screenshot": null,
+  "context": null,
+  "skipped_steps": [3],
+  "notes": [
+    {
+      "step": 1,
+      "text": "Button is called 'Add destination' now",
+      "at": "2026-09-07T10:12:03Z"
+    }
+  ],
+  "secret_treated": [
+    {
+      "location": "values.api_key",
+      "kind": "stripe_secret_key"
+    }
+  ],
+  "verify": null,
+  "deferral_count": 0,
+  "resumed_from": null,
+  "app_reachable": true,
+  "already_delivered": false,
+  "runbooks": [],
+  "spec_text": null
+}

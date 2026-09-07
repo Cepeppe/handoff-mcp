@@ -1,0 +1,22 @@
+{
+  "spec_version": 1,
+  "goal": "Allow screen recording for the terminal so the agent's capture tool works",
+  "where": "System Settings → Privacy & Security → Screen Recording",
+  "url": "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+  "why_human": "macOS lets only the user grant this permission.",
+  "values": {
+    "app_name": "iTerm"
+  },
+  "steps": [
+    {
+      "text": "Unlock the panel and enable the toggle next to the terminal application.",
+      "values": ["app_name"]
+    },
+    {
+      "text": "Quit and reopen the terminal; the permission applies at next launch.",
+      "warning": "Open sessions in the terminal will be closed."
+    }
+  ],
+  "verify": "Run `screencapture -x /tmp/probe.png` from the terminal and check that the file is not black.",
+  "lang": "en"
+}

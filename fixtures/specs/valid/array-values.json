@@ -1,0 +1,24 @@
+{
+  "spec_version": 1,
+  "goal": "Add the production IP addresses to the database allow list",
+  "where": "Neon Console → Project → Settings → IP Allow",
+  "url": "https://console.neon.tech",
+  "why_human": "The console requires a logged-in human session; the API token is not provisioned.",
+  "values": {
+    "addresses": ["203.0.113.7", "203.0.113.8", "198.51.100.24"],
+    "project_name": "myapp-production"
+  },
+  "steps": [
+    {
+      "text": "Open the project myapp-production.",
+      "values": ["project_name"]
+    },
+    {
+      "text": "Add each address to the allow list, one per line.",
+      "values": ["addresses"]
+    },
+    {
+      "text": "Press Save and wait for the green confirmation."
+    }
+  ]
+}

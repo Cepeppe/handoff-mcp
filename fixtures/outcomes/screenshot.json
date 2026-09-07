@@ -1,0 +1,53 @@
+{
+  "outcome_version": 1,
+  "handoff_id": "hf_7k3m9p2q4r",
+  "status": "screenshot",
+  "final": false,
+  "instruction": "The user sent what they see at step 2 as extracted text. Answer on this step: call handoff_to_user with handoff_id and reply; add replacement_steps only if the remaining steps must change.",
+  "round": 1,
+  "current_step": {
+    "index": 2,
+    "total": 4,
+    "text": "Select the events checkout.session.completed and invoice.paid."
+  },
+  "user_text": "I only see 'checkout.session.async_payment_succeeded'",
+  "screenshot": {
+    "mode": "text",
+    "text": "Select events to listen to\n[search] checkout\ncheckout.session.async_payment_failed\ncheckout.session.async_payment_succeeded",
+    "image_attached": false,
+    "width": 2880,
+    "height": 1800,
+    "redactions": 0,
+    "ocr_engine": "vision"
+  },
+  "context": {
+    "goal": "Register the Stripe webhook for payment events",
+    "where": "Stripe Dashboard → Developers → Webhooks",
+    "step": {
+      "index": 2,
+      "total": 4,
+      "text": "Select the events checkout.session.completed and invoice.paid.",
+      "url": null,
+      "warning": null
+    },
+    "step_values": {
+      "events": ["checkout.session.completed", "invoice.paid"]
+    }
+  },
+  "skipped_steps": [],
+  "notes": [
+    {
+      "step": 1,
+      "text": "Button is called 'Add destination' now",
+      "at": "2026-09-07T10:12:03Z"
+    }
+  ],
+  "secret_treated": [],
+  "verify": null,
+  "deferral_count": 0,
+  "resumed_from": null,
+  "app_reachable": true,
+  "already_delivered": false,
+  "runbooks": [],
+  "spec_text": null
+}

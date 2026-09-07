@@ -1,0 +1,340 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Cepeppe/handoff-mcp/main/schemas/handoff-outcome.v1.schema.json",
+  "title": "Handoff outcome v1",
+  "description": "What handoff_to_user and handoff_verify return to the agent, and what the log stores. Every field is always present, with null or [] when it does not apply, so an agent never branches on absence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "outcome_version",
+    "handoff_id",
+    "status",
+    "final",
+    "instruction",
+    "round",
+    "current_step",
+    "user_text",
+    "screenshot",
+    "context",
+    "skipped_steps",
+    "notes",
+    "secret_treated",
+    "verify",
+    "deferral_count",
+    "resumed_from",
+    "app_reachable",
+    "already_delivered",
+    "runbooks",
+    "spec_text"
+  ],
+  "properties": {
+    "outcome_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "handoff_id": {
+      "description": "Null only for runbook_match and text_mode, where no handoff was opened.",
+      "anyOf": [{ "$ref": "#/$defs/handoff_id" }, { "type": "null" }]
+    },
+    "status": {
+      "description": "One enumeration over the final states and the reasons a blocking call returns, so an agent branches on one field.",
+      "enum": [
+        "in_progress",
+        "question",
+        "screenshot",
+        "deferred",
+        "parked",
+        "awaiting_verification",
+        "confirmed_by_user",
+        "verified",
+        "failed",
+        "not_verified",
+        "abandoned",
+        "transferred_to_other_session",
+        "runbook_match",
+        "text_mode"
+      ]
+    },
+    "final": {
+      "description": "True for verified, confirmed_by_user, failed, not_verified and abandoned.",
+      "type": "boolean"
+    },
+    "instruction": {
+      "description": "What the agent should do next. The fallback that holds when hooks, raised timeouts or images do not. Exact texts live in docs/tool-contract.v1.md.",
+      "type": "string",
+      "minLength": 1
+    },
+    "round": {
+      "description": "Current round; a failed verification opens the next one on the same handoff.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "current_step": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["index", "total", "text"],
+          "properties": {
+            "index": {
+              "description": "1-based, the same number the overlay shows in its step counter.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "total": { "type": "integer", "minimum": 1 },
+            "text": { "type": "string", "minLength": 1 }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "user_text": {
+      "description": "The question, the comment attached to a screenshot, or the reason typed with Defer or Abandon.",
+      "type": ["string", "null"]
+    },
+    "screenshot": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "text",
+            "image_attached",
+            "width",
+            "height",
+            "redactions",
+            "ocr_engine"
+          ],
+          "properties": {
+            "mode": { "enum": ["image", "text"] },
+            "text": {
+              "description": "The OCR text as edited and sent in text mode; null when the user sent the image.",
+              "type": ["string", "null"]
+            },
+            "image_attached": {
+              "description": "Whether an MCP image block accompanies this outcome.",
+              "type": "boolean"
+            },
+            "width": { "type": "integer", "minimum": 1 },
+            "height": { "type": "integer", "minimum": 1 },
+            "redactions": { "type": "integer", "minimum": 0 },
+            "ocr_engine": {
+              "description": "Null when no OCR ran.",
+              "type": ["string", "null"]
+            }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "context": {
+      "description": "Present for question and screenshot, so the agent answers on the right step.",
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["goal", "where", "step", "step_values"],
+          "properties": {
+            "goal": { "type": "string", "minLength": 1 },
+            "where": { "type": "string", "minLength": 1 },
+            "step": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["index", "total", "text", "url", "warning"],
+              "properties": {
+                "index": { "type": "integer", "minimum": 1 },
+                "total": { "type": "integer", "minimum": 1 },
+                "text": { "type": "string", "minLength": 1 },
+                "url": { "type": ["string", "null"] },
+                "warning": { "type": ["string", "null"] }
+              }
+            },
+            "step_values": {
+              "description": "The step's value names mapped to their values, with \"[treated as secret]\" in place of secret-treated ones.",
+              "type": "object",
+              "maxProperties": 20,
+              "propertyNames": { "$ref": "#/$defs/value_name" },
+              "additionalProperties": {
+                "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+              }
+            }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "skipped_steps": {
+      "description": "1-based indices skipped in the current round.",
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1 }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["step", "text", "at"],
+        "properties": {
+          "step": { "type": "integer", "minimum": 1 },
+          "text": { "type": "string", "minLength": 1 },
+          "at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "secret_treated": {
+      "description": "Values and texts matched by the certain detector at ingress. The matched text is never included.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["location", "kind"],
+        "properties": {
+          "location": {
+            "description": "Where the match was found, for example values.api_key or steps[2].text.",
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "description": "The id of the certain pattern that matched, for example stripe_secret_key.",
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "verify": {
+      "description": "Null until a verification is reported.",
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ok", "detail", "reported_at", "late"],
+          "properties": {
+            "ok": { "type": ["boolean", "null"] },
+            "detail": { "type": ["string", "null"], "maxLength": 4000 },
+            "reported_at": { "type": "string", "format": "date-time" },
+            "late": {
+              "description": "True when the report arrived after the handoff had become not_verified.",
+              "type": "boolean"
+            }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "deferral_count": {
+      "description": "A second deferral parks the handoff.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "resumed_from": {
+      "description": "The opening session, when the current call comes from a different one.",
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["agent", "project"],
+          "properties": {
+            "agent": { "type": "string", "minLength": 1 },
+            "project": { "type": "string", "minLength": 1 }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "app_reachable": {
+      "description": "False only in text_mode.",
+      "type": "boolean"
+    },
+    "already_delivered": {
+      "description": "True when a resume returns a final outcome that was already delivered.",
+      "type": "boolean"
+    },
+    "runbooks": {
+      "description": "Filled only for runbook_match and by handoff_runbooks.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/runbook_match" }
+    },
+    "spec_text": {
+      "description": "The rendered spec, only for text_mode.",
+      "type": ["string", "null"]
+    }
+  },
+  "$defs": {
+    "handoff_id": {
+      "type": "string",
+      "pattern": "^hf_[0-9a-hjkmnp-tv-z]{10}$"
+    },
+    "value_name": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_.-]{0,63}$"
+    },
+    "runbook_match": {
+      "description": "One matching runbook with the draft spec derived from it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "where",
+        "goal",
+        "trust",
+        "last_verified_at",
+        "last_run_failed_at",
+        "runs",
+        "matched_words",
+        "draft_spec",
+        "values_to_fill",
+        "annotations"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^rb_[0-9a-hjkmnp-tv-z]{10}$" },
+        "path": {
+          "description": "Absolute path of the runbook file in ~/.handoff/runbooks/.",
+          "type": "string",
+          "minLength": 1
+        },
+        "where": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "goal": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "trust": { "enum": ["verified", "confirmed_by_user"] },
+        "last_verified_at": { "type": "string", "format": "date-time" },
+        "last_run_failed_at": {
+          "anyOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
+        },
+        "runs": { "type": "integer", "minimum": 1 },
+        "matched_words": {
+          "description": "The shared goal tokens that produced the match, so the agent can see why.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "draft_spec": {
+          "description": "The runbook converted to a spec with [name] markers and empty values. Intentionally not yet valid: the empty values fail the semantic rules until the agent fills them.",
+          "$ref": "https://raw.githubusercontent.com/Cepeppe/handoff-mcp/main/schemas/handoff-spec.v1.schema.json"
+        },
+        "values_to_fill": {
+          "description": "Value name to its description, or null when the value appeared in no step.",
+          "type": "object",
+          "maxProperties": 50,
+          "propertyNames": { "$ref": "#/$defs/value_name" },
+          "additionalProperties": { "type": ["string", "null"], "maxLength": 4096 }
+        },
+        "annotations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/annotation" }
+        }
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "text", "round"],
+      "properties": {
+        "kind": { "enum": ["note", "question", "reply", "error", "correction"] },
+        "text": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "round": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

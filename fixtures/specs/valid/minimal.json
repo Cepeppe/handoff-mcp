@@ -1,0 +1,12 @@
+{
+  "spec_version": 1,
+  "goal": "Accept the updated developer terms",
+  "where": "GitHub → Settings → Developer settings",
+  "why_human": "Only the account owner can accept the terms.",
+  "values": {},
+  "steps": [
+    {
+      "text": "Read the terms and press Accept."
+    }
+  ]
+}

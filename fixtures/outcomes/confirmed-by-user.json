@@ -1,0 +1,26 @@
+{
+  "outcome_version": 1,
+  "handoff_id": "hf_7k3m9p2q4r",
+  "status": "confirmed_by_user",
+  "final": true,
+  "instruction": "The handoff is complete and recorded as confirmed by the user.",
+  "round": 1,
+  "current_step": {
+    "index": 4,
+    "total": 4,
+    "text": "Paste it into .env as STRIPE_WEBHOOK_SECRET."
+  },
+  "user_text": null,
+  "screenshot": null,
+  "context": null,
+  "skipped_steps": [],
+  "notes": [],
+  "secret_treated": [],
+  "verify": null,
+  "deferral_count": 0,
+  "resumed_from": null,
+  "app_reachable": true,
+  "already_delivered": false,
+  "runbooks": [],
+  "spec_text": null
+}
