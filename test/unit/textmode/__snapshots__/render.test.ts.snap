@@ -1,0 +1,45 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderSpecText, on the two design examples > renders a spec whose value was treated as a secret 1`] = `
+"# Handoff (text mode): Create an API key for the staging environment
+Where: Resend Dashboard → API Keys
+Why a person: The key is shown once and must never pass through the agent.
+Values (from the project):
+  - key_name: staging-mailer
+  - api_key: [treated as secret: api_key]
+Steps:
+  1. Press Create API Key and name it staging-mailer.   (values: key_name)
+  2. Copy the key into .env.staging.   (values: api_key)
+After the steps, the user copies these values into project files (never paste them in chat):
+  - RESEND_API_KEY → .env.staging
+Verification you must perform afterwards: Check that RESEND_API_KEY exists in .env.staging without reading its value."
+`;
+
+exports[`renderSpecText, on the two design examples > renders the Stripe webhook spec: url, array value, secrets and verification 1`] = `
+"# Handoff (text mode): Register the Stripe webhook for payment events
+Where: Stripe Dashboard → Developers → Webhooks  [https://dashboard.stripe.com/webhooks]
+Why a person: Requires access to the production Stripe account.
+Values (from the project):
+  - endpoint_url: https://api.myapp.example/webhooks/stripe
+  - events: checkout.session.completed, invoice.paid
+Steps:
+  1. Click Add endpoint and paste the endpoint URL.   (values: endpoint_url)
+  2. Select the events checkout.session.completed and invoice.paid.   (values: events)
+  3. Save and copy the signing secret.
+  4. Paste it into .env as STRIPE_WEBHOOK_SECRET.
+After the steps, the user copies these values into project files (never paste them in chat):
+  - STRIPE_WEBHOOK_SECRET → .env
+Verification you must perform afterwards: Check that STRIPE_WEBHOOK_SECRET exists in .env without reading its value, then send a test event from the dashboard and verify it reaches /webhooks/stripe with a valid signature."
+`;
+
+exports[`renderSpecText, on the two design examples > renders the macOS screen-recording spec: an OS settings url and a step warning 1`] = `
+"# Handoff (text mode): Allow screen recording for the terminal so the agent's capture tool works
+Where: System Settings → Privacy & Security → Screen Recording  [x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture]
+Why a person: macOS lets only the user grant this permission.
+Values (from the project):
+  - app_name: iTerm
+Steps:
+  1. Unlock the panel and enable the toggle next to the terminal application.   (values: app_name)
+  2. Quit and reopen the terminal; the permission applies at next launch.   WARNING: Open sessions in the terminal will be closed.
+Verification you must perform afterwards: Run \`screencapture -x /tmp/probe.png\` from the terminal and check that the file is not black."
+`;
