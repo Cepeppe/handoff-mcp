@@ -292,11 +292,13 @@ describe('format-tarball.mjs', () => {
     // the `tar` on `PATH` under Git Bash and on the Windows runner, reads `C:\…` as a
     // remote host and tries to open a network connection.
     const archive = `${out}/handoff-mcp-${packageJson.version}-format.tar.gz`;
+    // The listing is split on `\r?\n`: the `tar` of the Windows runner ends its lines with
+    // CRLF where the same command under Git Bash ends them with LF.
     const entries = execFileSync('tar', ['-tzf', archive.split('\\').join('/')], {
       cwd: ROOT,
       encoding: 'utf8',
     })
-      .split('\n')
+      .split(/\r?\n/)
       .filter((entry) => entry !== '');
     const top = [...new Set(entries.map((entry) => entry.split('/')[0]))].sort();
     expect(top).toEqual(['FORMAT-VERSION', 'docs', 'fixtures', 'patterns', 'protocol', 'schemas']);
