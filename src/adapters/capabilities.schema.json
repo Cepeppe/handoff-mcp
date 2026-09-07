@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Cepeppe/handoff-mcp/main/src/adapters/capabilities.schema.json",
+  "title": "Capability table",
+  "description": "INTERNAL. Shape of src/adapters/capabilities.json, the static capability table of TECHNICAL-DESIGN 5.6 (ADPT-02). It is not a public format: agents and the app never read this file, they receive the row already resolved (hello.capability_row, protocol/channel/channel.v1.schema.json). The schema exists so that a hand-edited row cannot reach a release with a missing column, a misspelled field or a support level nobody implements.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["capabilities_version", "rows"],
+  "properties": {
+    "capabilities_version": {
+      "description": "Version of this file's shape. Bumped only by a change that breaks the readers.",
+      "const": 1
+    },
+    "_notes": {
+      "description": "Free-form documentation kept next to the data, in the style of patterns/certain-secrets.v1.json. Never read by code.",
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "rows": {
+      "description": "One row per agent id. The unknown row must be present: it is the fallback of the identity resolution and the source of every null field.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/row" }
+    }
+  },
+  "$defs": {
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent_id",
+        "display_name",
+        "status",
+        "support",
+        "match",
+        "tool_timeout_ms_default",
+        "per_server_timeout_field",
+        "images_in_results",
+        "stop_hook",
+        "subagent_stop_hook",
+        "session_identity",
+        "user_request_delivery",
+        "cancellation_notifications",
+        "heartbeat_after_ms"
+      ],
+      "properties": {
+        "agent_id": {
+          "description": "The table key, shared with the app (channel agent_id) and with the installation adapters (INST-08). Not an enum, so a new adapter does not bump the protocol.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+        },
+        "display_name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "status": {
+          "description": "supported: the adapter has shipped and its facts are measured. planned: the row exists so the agent enters the table in the committed order of ADPT-06, and its unmeasured fields are null.",
+          "enum": ["supported", "planned"]
+        },
+        "support": {
+          "description": "The declared support level of ADPT-01.",
+          "enum": ["full", "base", "unsupported"]
+        },
+        "match": { "$ref": "#/$defs/match" },
+        "tool_timeout_ms_default": { "$ref": "#/$defs/nullable_duration_ms" },
+        "per_server_timeout_field": {
+          "description": "Name of the per-server timeout field in that agent's MCP entry (A-04), or null when the agent has none or it has not been measured.",
+          "anyOf": [{ "type": "string", "minLength": 1, "maxLength": 64 }, { "type": "null" }]
+        },
+        "images_in_results": { "$ref": "#/$defs/nullable_boolean" },
+        "stop_hook": { "$ref": "#/$defs/nullable_boolean" },
+        "subagent_stop_hook": { "$ref": "#/$defs/nullable_boolean" },
+        "session_identity": {
+          "description": "How the app keys a session of this agent. Never null: an agent whose identity strategy is unknown cannot be added to the table.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "user_request_delivery": {
+          "description": "How a user-opened request reaches this agent (OPEN-03..08), in the order the app tries them, or null when it has not been measured.",
+          "anyOf": [
+            {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "enum": ["clipboard_focus", "stop_hook"] }
+            },
+            { "type": "null" }
+          ]
+        },
+        "cancellation_notifications": { "$ref": "#/$defs/nullable_boolean" },
+        "heartbeat_after_ms": {
+          "description": "The heartbeat to use when no tool timeout can be resolved (TOOL-06a). Only the unknown row sets it; every other row inherits it through the null rule.",
+          "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }]
+        }
+      }
+    },
+    "match": {
+      "description": "What the identity resolution of 5.6 compares against, in its own order: HANDOFF_AGENT against env, then clientInfo.name against client_names.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["env", "client_names"],
+      "properties": {
+        "env": {
+          "description": "The HANDOFF_AGENT value the installer writes for this agent. null on the unknown row, which nothing selects explicitly.",
+          "anyOf": [{ "type": "string", "minLength": 1, "maxLength": 32 }, { "type": "null" }]
+        },
+        "client_names": {
+          "description": "clientInfo.name values observed for this agent (A-08). Empty until the canary suite records them; only measured values belong here.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 100 }
+        }
+      }
+    },
+    "nullable_boolean": {
+      "description": "null means not measured for this agent; the server reads the unknown row's value instead. It never means false.",
+      "anyOf": [{ "type": "boolean" }, { "type": "null" }]
+    },
+    "nullable_duration_ms": {
+      "description": "A duration in milliseconds, or null when not measured.",
+      "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }]
+    }
+  }
+}
