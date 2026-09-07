@@ -196,7 +196,7 @@
             "minLength": 1
           },
           "kind": {
-            "description": "The id of the certain pattern that matched, for example stripe_secret_key.",
+            "description": "The family of the pattern that matched, one of private_key, api_key, token, webhook_secret, webhook_url, jwt (patterns/certain-secrets.v1.json).",
             "type": "string",
             "minLength": 1
           }

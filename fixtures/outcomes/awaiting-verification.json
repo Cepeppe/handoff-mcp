@@ -24,7 +24,7 @@
   "secret_treated": [
     {
       "location": "values.api_key",
-      "kind": "stripe_secret_key"
+      "kind": "api_key"
     }
   ],
   "verify": null,

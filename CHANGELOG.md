@@ -11,6 +11,15 @@ schema version, which is independent of the package version.
 
 ### Added
 
+- Public certain-secret patterns in `patterns/certain-secrets.v1.json`: sixteen families
+  with their own match and counter-example lists, the shared English and Italian stop-word
+  lists used by runbook matching, and notes explaining the regex subset that JavaScript and
+  Rust read the same way.
+- Secret corpora `fixtures/secrets/positive.txt` and `fixtures/secrets/negative.txt`, and a
+  contract test that requires recall 1.0 on the first and zero matches on the second.
+- `scanText` over the compiled patterns, reporting the family and the span of a match and
+  never the text that matched, and the identifier generators for handoffs, sessions, calls
+  and runbooks, which by construction can never produce a value a pattern would match.
 - Public JSON Schemas (draft 2020-12) for the handoff spec, the outcome and the runbook
   file, with `schemas/README.md` describing the version rules, the limits and the rule
   that placeholders exist only in runbooks.
