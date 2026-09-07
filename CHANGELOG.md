@@ -11,6 +11,13 @@ schema version, which is independent of the package version.
 
 ### Added
 
+- Standalone executables: `build/sea/build-sea.mjs` turns the esbuild bundle into a Node
+  Single Executable Application named after the release asset of the platform it runs on,
+  `build/sea/smoke.mjs` exercises the result the way a machine without Node would, and
+  `.github/workflows/sea.yml` builds and smokes `win32-x64` on every push to `main` and the
+  two macOS targets on demand. `docs/build-sea.md` carries the procedure, the entitlements
+  the signed macOS build will need, and the fallback if a platform stops working.
+
 - `schemas/tool-contract.v1.md`, the normative source of everything the server says to an
   agent: the MCP input schema, description and annotations of `handoff_to_user`,
   `handoff_verify` and `handoff_runbooks`, the exact `instruction` sentence of each of the

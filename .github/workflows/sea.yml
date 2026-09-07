@@ -1,0 +1,99 @@
+name: SEA
+
+# Builds the standalone executables of TECHNICAL-DESIGN §3.5 (SRV-24) and smokes each one
+# on the platform it was built for. Cross-building is impossible: the preparation blob is
+# injected into the Node binary of the runner, so every asset needs its own runner.
+#
+# macOS is deferred (TASKS.md §0.4 item 7) and its minutes cost 10x, so the two darwin
+# legs run only when they are dispatched by hand. The Intel runner label is a dispatch
+# input because that image is the one most likely to be retired from under us; if the
+# default disappears, dispatch again with another label instead of editing this file.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      macos_x64_runner:
+        description: Runner label for the darwin-x64 leg
+        default: macos-13
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sea-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  win32-x64:
+    name: win32-x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:sea
+      - run: pnpm smoke:sea
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sea-win32-x64
+          path: dist/sea/handoff-mcp-*-win32-x64.exe
+          if-no-files-found: error
+
+  darwin-arm64:
+    name: darwin-arm64
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:sea
+      - run: pnpm smoke:sea
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sea-darwin-arm64
+          path: dist/sea/handoff-mcp-*-darwin-arm64
+          if-no-files-found: error
+
+  darwin-x64:
+    name: darwin-x64
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ${{ inputs.macos_x64_runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:sea
+      - run: pnpm smoke:sea
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sea-darwin-x64
+          path: dist/sea/handoff-mcp-*-darwin-x64
+          if-no-files-found: error
