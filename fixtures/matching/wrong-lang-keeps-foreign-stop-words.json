@@ -1,0 +1,23 @@
+{
+  "case": "wrong-lang-keeps-foreign-stop-words",
+  "why": "The same two Italian goals declared as en: the English list does not contain gli, so it survives and shows up in matched_words. Declaring the language wrongly degrades the explanation, never the correctness of the rule.",
+  "query": {
+    "where": "Console Stripe → Sviluppatori → Webhook",
+    "goal": "Registrare il webhook per gli eventi di pagamento",
+    "lang": "en"
+  },
+  "runbooks": [
+    {
+      "id": "rb_a000000001",
+      "where": "Console Stripe → Sviluppatori → Webhook",
+      "goal": "Configurare il webhook dei pagamenti con gli eventi",
+      "last_verified_at": "2026-09-01T10:00:00Z"
+    }
+  ],
+  "expected": [
+    {
+      "id": "rb_a000000001",
+      "matched_words": ["webhook", "gli", "eventi"]
+    }
+  ]
+}

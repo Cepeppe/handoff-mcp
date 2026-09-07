@@ -1,0 +1,23 @@
+{
+  "case": "case-insensitive",
+  "why": "Both halves of the rule lowercase first: shouting the place and the goal changes nothing.",
+  "query": {
+    "where": "STRIPE DASHBOARD → DEVELOPERS → WEBHOOKS",
+    "goal": "REGISTER THE STRIPE WEBHOOK",
+    "lang": "en"
+  },
+  "runbooks": [
+    {
+      "id": "rb_a000000001",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-01T10:00:00Z"
+    }
+  ],
+  "expected": [
+    {
+      "id": "rb_a000000001",
+      "matched_words": ["register", "stripe", "webhook"]
+    }
+  ]
+}

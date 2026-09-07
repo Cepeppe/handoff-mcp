@@ -1,0 +1,23 @@
+{
+  "case": "leading-and-trailing-separators-trimmed",
+  "why": "Separators at either end vanish with the trim, so a place copied with its breadcrumb arrow still matches.",
+  "query": {
+    "where": "  → Stripe Dashboard / Developers / Webhooks.  ",
+    "goal": "Register the Stripe webhook",
+    "lang": "en"
+  },
+  "runbooks": [
+    {
+      "id": "rb_a000000001",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-01T10:00:00Z"
+    }
+  ],
+  "expected": [
+    {
+      "id": "rb_a000000001",
+      "matched_words": ["register", "stripe", "webhook"]
+    }
+  ]
+}

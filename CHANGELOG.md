@@ -25,6 +25,21 @@ schema version, which is independent of the package version.
 - `test/contract/validate.test.ts` asserts the error code and the exact path of every
   invalid spec fixture, and `test/unit/format/` the exact texts of each rule, the
   translation of every schema keyword, and that no rendered error carries a spec value.
+- The runbook reader, matcher and converter: `RunbookStore` lists `~/.handoff/runbooks/`,
+  validates each file against the published runbook schema and caches it by path and mtime,
+  skipping a bad file with one warning on stderr rather than failing the search; a missing
+  folder is an empty result, an unreadable one is `RUNBOOKS_UNREADABLE` for the tool and a
+  silent skip for the safety net. `matchRunbooks` applies the rule of the design — same
+  `where` after normalisation, at least one shared goal word beyond stop-words — ranked by
+  shared words, then freshness, then id, and capped at five. `searchRunbooks` converts each
+  match into the `runbooks[]` item an agent receives, with `{{name}}` turned into `[name]`,
+  the names collected into each step, and a draft spec whose empty values keep it invalid
+  until the agent fills them.
+- `handoff-mcp runbooks search --where … --goal … [--lang …]`: the same rule offline,
+  printing the same `{ "runbooks": [ … ] }` the tool returns.
+- `fixtures/matching/*.json` (19 cases, with the format documented beside them) and
+  `test/contract/matching.test.ts` pin the matching rule for every implementation, and the
+  conversion is asserted equal to the published `runbook_match` outcome fixture.
 
 ## [0.1.0] - 2026-09-07
 

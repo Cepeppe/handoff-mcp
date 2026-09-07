@@ -1,0 +1,23 @@
+{
+  "case": "all-separator-characters",
+  "why": "Every character of the separator list of §4.5.3 is a separator: an arrow, the two chevrons, both slashes, the pipe, the en and em dashes, the hyphen, the colon, the comma, the semicolon and the full stop.",
+  "query": {
+    "where": "Stripe→Dashboard>Developers»Webhooks/Events\\Keys|Logs–Usage—Billing-Team:Roles,Plans;Limits.Quotas",
+    "goal": "Register the Stripe webhook",
+    "lang": "en"
+  },
+  "runbooks": [
+    {
+      "id": "rb_a000000001",
+      "where": "Stripe Dashboard Developers Webhooks Events Keys Logs Usage Billing Team Roles Plans Limits Quotas",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-01T10:00:00Z"
+    }
+  ],
+  "expected": [
+    {
+      "id": "rb_a000000001",
+      "matched_words": ["register", "stripe", "webhook"]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "case": "italian-stop-words",
+  "why": "With lang it the Italian stop-words go, and no stemming happens: pagamento and pagamenti are different words.",
+  "query": {
+    "where": "Console Stripe → Sviluppatori → Webhook",
+    "goal": "Registrare il webhook per gli eventi di pagamento",
+    "lang": "it"
+  },
+  "runbooks": [
+    {
+      "id": "rb_a000000001",
+      "where": "Console Stripe → Sviluppatori → Webhook",
+      "goal": "Configurare il webhook dei pagamenti con gli eventi",
+      "last_verified_at": "2026-09-01T10:00:00Z"
+    }
+  ],
+  "expected": [
+    {
+      "id": "rb_a000000001",
+      "matched_words": ["webhook", "eventi"]
+    }
+  ]
+}

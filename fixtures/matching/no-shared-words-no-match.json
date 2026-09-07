@@ -1,0 +1,18 @@
+{
+  "case": "no-shared-words-no-match",
+  "why": "The same place with an unrelated goal is not a match: at least one word beyond stop-words has to be shared.",
+  "query": {
+    "where": "Stripe Dashboard → Developers → Webhooks",
+    "goal": "Download the invoice archive",
+    "lang": "en"
+  },
+  "runbooks": [
+    {
+      "id": "rb_a000000001",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-01T10:00:00Z"
+    }
+  ],
+  "expected": []
+}

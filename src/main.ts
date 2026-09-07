@@ -3,21 +3,24 @@
  *
  * Routes the five subcommands of the CLI table: `serve` (the default), `hook stop`,
  * `validate <spec.json>`, `runbooks search --where … --goal …` and `doctor`. `--version`,
- * `--help` and `validate` do real work; every other subcommand answers with the task that
- * implements it.
+ * `--help`, `validate` and `runbooks search` do real work; every other subcommand answers
+ * with the task that implements it.
  *
  * Output discipline (§5.12): the **result** of a subcommand goes to stdout — the JSON
- * decision of `hook stop` (§5.11, T-021), the JSON error or the summary line of `validate`
- * — and everything else, help, usage errors and logging, goes to stderr. stdout is
- * reserved for the MCP stdio transport only while `serve` is serving.
+ * decision of `hook stop` (§5.11, T-021), the JSON error or the summary line of `validate`,
+ * the JSON result of `runbooks search` — and everything else, help, usage errors, the
+ * warning about a skipped runbook and logging, goes to stderr. stdout is reserved for the
+ * MCP stdio transport only while `serve` is serving.
  *
- * Exit codes: 0 success · 1 the command ran and answered no (an invalid spec), or the
- * subcommand exists but is not implemented yet · 2 usage error (unknown subcommand,
- * unknown option, missing argument, a file that cannot be read).
+ * Exit codes: 0 success · 1 the command ran and answered no (an invalid spec, a runbook
+ * folder that cannot be read), or the subcommand exists but is not implemented yet ·
+ * 2 usage error (unknown subcommand, unknown option, missing argument, a file that cannot
+ * be read).
  */
 import { readFileSync } from 'node:fs';
 
 import { errorJson, handoffError, validateSpec, type HandoffSpec } from './format';
+import { defaultRunbookRoots, RunbookStore, searchRunbooks } from './runbooks';
 
 /**
  * Replaced by `build/bundle.mjs` with the version from `package.json`. It stays undefined
@@ -38,18 +41,25 @@ export const VERSION: string =
 export type Command = 'serve' | 'hook-stop' | 'validate' | 'runbooks-search' | 'doctor';
 
 /** Subcommands that still answer with the task that will implement them. */
-type Placeholder = Exclude<Command, 'validate'>;
+type Placeholder = Exclude<Command, 'validate' | 'runbooks-search'>;
 
 /** The task that turns each placeholder into behaviour. */
 const IMPLEMENTED_BY: Record<Placeholder, string> = {
   serve: 'T-017',
   'hook-stop': 'T-021',
-  'runbooks-search': 'T-016',
   doctor: 'T-021',
 };
 
+/** The options `runbooks search` reads, with the bounds of the tool input (§4.7.3). */
+export interface RunbooksSearchArgs {
+  readonly where: string;
+  readonly goal: string;
+  readonly lang?: string;
+}
+
 export type ParsedArgs =
   | { kind: 'command'; command: 'validate'; file: string }
+  | ({ kind: 'command'; command: 'runbooks-search' } & RunbooksSearchArgs)
   | { kind: 'command'; command: Placeholder }
   | { kind: 'version' }
   | { kind: 'help' }
@@ -61,7 +71,7 @@ Usage:
   handoff-mcp [serve]                     Serve MCP over stdio (default)
   handoff-mcp hook stop                   Stop / SubagentStop hook decision for the agent
   handoff-mcp validate <spec.json>        Validate a handoff spec offline
-  handoff-mcp runbooks search --where <text> --goal <text>
+  handoff-mcp runbooks search --where <text> --goal <text> [--lang <tag>]
                                           Search the saved runbooks offline
   handoff-mcp doctor                      Report agent id, capabilities, token and socket
 
@@ -76,8 +86,68 @@ Environment:
   HANDOFF_MCP_LOG                         error (default) | debug
 
 A subcommand prints its result on stdout: validate prints a summary line, or the same JSON
-error the tool returns and exits 1. Help, usage errors and logging go to stderr; while serve
-is serving, stdout carries the MCP stdio transport and nothing else.`;
+error the tool returns and exits 1; runbooks search prints {"runbooks": [...]}, the same
+result the handoff_runbooks tool returns. Help, usage errors, warnings about unreadable
+runbook files and logging go to stderr; while serve is serving, stdout carries the MCP
+stdio transport and nothing else.`;
+
+/** The bounds `handoff_runbooks` puts on its inputs (§4.7.3), applied to the options too. */
+const WHERE_GOAL_MAX_LENGTH = 300;
+
+/** The BCP-47 shape the spec schema and the tool input both accept. */
+const LANG_PATTERN = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/u;
+
+/**
+ * `--where <text>` and `--where=<text>` are the same option; the second form is what a
+ * shell user reaches for when the text starts with a dash.
+ */
+function optionName(argument: string): { name: string; inline: string | undefined } {
+  const equals = argument.indexOf('=');
+  if (equals === -1) return { name: argument, inline: undefined };
+  return { name: argument.slice(0, equals), inline: argument.slice(equals + 1) };
+}
+
+/** `runbooks search --where … --goal … [--lang …]`. */
+function parseRunbooksSearch(argv: readonly string[]): ParsedArgs {
+  const values: Record<string, string> = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index] ?? '';
+    const { name, inline } = optionName(argument);
+    if (name !== '--where' && name !== '--goal' && name !== '--lang') {
+      return { kind: 'usage-error', message: `unknown option: ${name}` };
+    }
+    const value = inline ?? argv[++index];
+    if (value === undefined) return { kind: 'usage-error', message: `${name} needs a value` };
+    values[name] = value;
+  }
+
+  for (const name of ['--where', '--goal'] as const) {
+    const value = values[name];
+    if (value === undefined) {
+      return { kind: 'usage-error', message: `runbooks search needs ${name}` };
+    }
+    if (value.trim() === '') return { kind: 'usage-error', message: `${name} is empty` };
+    if (value.length > WHERE_GOAL_MAX_LENGTH) {
+      return {
+        kind: 'usage-error',
+        message: `${name} is longer than ${String(WHERE_GOAL_MAX_LENGTH)} characters`,
+      };
+    }
+  }
+
+  const lang = values['--lang'];
+  if (lang !== undefined && !LANG_PATTERN.test(lang)) {
+    return { kind: 'usage-error', message: '--lang is not a BCP-47 language tag' };
+  }
+
+  return {
+    kind: 'command',
+    command: 'runbooks-search',
+    where: values['--where'] ?? '',
+    goal: values['--goal'] ?? '',
+    ...(lang === undefined ? {} : { lang }),
+  };
+}
 
 /**
  * Pure argument parsing, so the routing can be tested without running anything.
@@ -112,7 +182,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
 
     case 'runbooks': {
       const action = argv[1];
-      if (action === 'search') return { kind: 'command', command: 'runbooks-search' };
+      if (action === 'search') return parseRunbooksSearch(argv.slice(2));
       if (action === undefined) {
         return { kind: 'usage-error', message: 'runbooks needs an action: search' };
       }
@@ -209,6 +279,26 @@ function runValidate(file: string, streams: CliStreams): number {
   return 0;
 }
 
+/**
+ * `handoff-mcp runbooks search --where … --goal … [--lang …]`: the matching rule of §4.5.3
+ * over `~/.handoff/runbooks/`, offline, for users of the server alone (§5.12).
+ *
+ * It prints exactly what the `handoff_runbooks` tool returns, `{ "runbooks": [ … ] }`, so
+ * what a person sees here is what an agent will see. A folder that is not there is an empty
+ * list and exit 0; a folder that cannot be read is `RUNBOOKS_UNREADABLE` and exit 1, which
+ * is the answer the tool gives (§5.10). Files that had to be skipped are named on stderr.
+ */
+function runRunbooksSearch(query: RunbooksSearchArgs, streams: CliStreams): number {
+  const store = new RunbookStore(defaultRunbookRoots(), { warn: streams.err });
+  const read = store.readForTool();
+  if (!read.ok) {
+    streams.out(errorJson(read.error));
+    return 1;
+  }
+  streams.out(JSON.stringify({ runbooks: searchRunbooks(read.runbooks, query) }, null, 2));
+  return 0;
+}
+
 /** Routes one invocation and returns the process exit code. */
 export function run(argv: readonly string[], streams: CliStreams = consoleStreams): number {
   const parsed = parseArgs(argv);
@@ -229,6 +319,7 @@ export function run(argv: readonly string[], streams: CliStreams = consoleStream
 
     case 'command': {
       if (parsed.command === 'validate') return runValidate(parsed.file, streams);
+      if (parsed.command === 'runbooks-search') return runRunbooksSearch(parsed, streams);
       streams.err(
         `handoff-mcp: ${parsed.command} is not implemented (${IMPLEMENTED_BY[parsed.command]})`,
       );

@@ -1,0 +1,18 @@
+{
+  "case": "only-stop-words-shared-no-match",
+  "why": "Stop-words are dropped before the intersection, so two goals that share only `the` do not match.",
+  "query": {
+    "where": "Stripe Dashboard → Developers → Webhooks",
+    "goal": "Update the account settings",
+    "lang": "en"
+  },
+  "runbooks": [
+    {
+      "id": "rb_a000000001",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Delete the payment method",
+      "last_verified_at": "2026-09-01T10:00:00Z"
+    }
+  ],
+  "expected": []
+}

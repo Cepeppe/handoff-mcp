@@ -1,0 +1,23 @@
+{
+  "case": "region-subtag-selects-its-language",
+  "why": "en-GB selects the en list, not the union: come is a stop-word in Italian and is kept here, which is what tells the two apart.",
+  "query": {
+    "where": "Stripe Dashboard → Developers → Webhooks",
+    "goal": "Come back to the billing page",
+    "lang": "en-GB"
+  },
+  "runbooks": [
+    {
+      "id": "rb_a000000001",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Come to the billing overview",
+      "last_verified_at": "2026-09-01T10:00:00Z"
+    }
+  ],
+  "expected": [
+    {
+      "id": "rb_a000000001",
+      "matched_words": ["come", "billing"]
+    }
+  ]
+}

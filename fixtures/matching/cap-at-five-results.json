@@ -1,0 +1,75 @@
+{
+  "case": "cap-at-five-results",
+  "why": "Seven runbooks match and five come back: RUNBOOK_MATCH_MAX_RESULTS caps the list after the ranking, never before it.",
+  "query": {
+    "where": "Stripe Dashboard → Developers → Webhooks",
+    "goal": "Register the Stripe webhook",
+    "lang": "en"
+  },
+  "runbooks": [
+    {
+      "id": "rb_g000000007",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-03T10:00:00Z"
+    },
+    {
+      "id": "rb_c000000003",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-03T10:00:00Z"
+    },
+    {
+      "id": "rb_e000000005",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-03T10:00:00Z"
+    },
+    {
+      "id": "rb_a000000001",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-03T10:00:00Z"
+    },
+    {
+      "id": "rb_f000000006",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-03T10:00:00Z"
+    },
+    {
+      "id": "rb_b000000002",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-03T10:00:00Z"
+    },
+    {
+      "id": "rb_d000000004",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-03T10:00:00Z"
+    }
+  ],
+  "expected": [
+    {
+      "id": "rb_a000000001",
+      "matched_words": ["register", "stripe", "webhook"]
+    },
+    {
+      "id": "rb_b000000002",
+      "matched_words": ["register", "stripe", "webhook"]
+    },
+    {
+      "id": "rb_c000000003",
+      "matched_words": ["register", "stripe", "webhook"]
+    },
+    {
+      "id": "rb_d000000004",
+      "matched_words": ["register", "stripe", "webhook"]
+    },
+    {
+      "id": "rb_e000000005",
+      "matched_words": ["register", "stripe", "webhook"]
+    }
+  ]
+}

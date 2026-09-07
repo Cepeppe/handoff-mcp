@@ -1,0 +1,23 @@
+{
+  "case": "nfkc-normalisation",
+  "why": "NFKC runs before everything else: full-width letters, an ideographic space and the fi ligature all fold into their ASCII forms, in the place and in the goal alike.",
+  "query": {
+    "where": "Ｓｔｒｉｐｅ　Ｄａｓｈｂｏａｒｄ → Developers → Webhooks",
+    "goal": "Conﬁgure the Stripe webhook",
+    "lang": "en"
+  },
+  "runbooks": [
+    {
+      "id": "rb_a000000001",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Configure the Stripe webhook for payments",
+      "last_verified_at": "2026-09-01T10:00:00Z"
+    }
+  ],
+  "expected": [
+    {
+      "id": "rb_a000000001",
+      "matched_words": ["configure", "stripe", "webhook"]
+    }
+  ]
+}

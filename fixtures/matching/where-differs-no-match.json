@@ -1,0 +1,18 @@
+{
+  "case": "where-differs-no-match",
+  "why": "The place has to be the same place. Sharing every word of the goal is not enough: `where` is an equality, not a similarity.",
+  "query": {
+    "where": "Stripe Dashboard → Developers → API keys",
+    "goal": "Register the Stripe webhook for payment events",
+    "lang": "en"
+  },
+  "runbooks": [
+    {
+      "id": "rb_a000000001",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-01T10:00:00Z"
+    }
+  ],
+  "expected": []
+}

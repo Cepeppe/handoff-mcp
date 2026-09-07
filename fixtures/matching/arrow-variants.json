@@ -1,0 +1,43 @@
+{
+  "case": "arrow-variants",
+  "why": "The four separators an agent is most likely to type between the parts of a place all normalise to the same string, so the same page written three ways is one place.",
+  "query": {
+    "where": "Stripe Dashboard > Developers > Webhooks",
+    "goal": "Register the Stripe webhook",
+    "lang": "en"
+  },
+  "runbooks": [
+    {
+      "id": "rb_a000000001",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-01T10:00:00Z"
+    },
+    {
+      "id": "rb_b000000002",
+      "where": "Stripe Dashboard » Developers » Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-02T10:00:00Z"
+    },
+    {
+      "id": "rb_c000000003",
+      "where": "Stripe Dashboard / Developers / Webhooks",
+      "goal": "Register the Stripe webhook for payment events",
+      "last_verified_at": "2026-09-03T10:00:00Z"
+    }
+  ],
+  "expected": [
+    {
+      "id": "rb_c000000003",
+      "matched_words": ["register", "stripe", "webhook"]
+    },
+    {
+      "id": "rb_b000000002",
+      "matched_words": ["register", "stripe", "webhook"]
+    },
+    {
+      "id": "rb_a000000001",
+      "matched_words": ["register", "stripe", "webhook"]
+    }
+  ]
+}

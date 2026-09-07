@@ -1,7 +1,9 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { HandoffErrorPayload } from '../../src/format';
 import { HELP_TEXT, parseArgs, run, VERSION, type CliStreams, type Command } from '../../src/main';
@@ -42,10 +44,25 @@ describe('parseArgs', () => {
   it.each<[string[], Command]>([
     [['serve'], 'serve'],
     [['hook', 'stop'], 'hook-stop'],
-    [['runbooks', 'search', '--where', 'a', '--goal', 'b'], 'runbooks-search'],
     [['doctor'], 'doctor'],
   ])('routes %j', (argv, command) => {
     expect(parseArgs(argv)).toEqual({ kind: 'command', command });
+  });
+
+  it('routes runbooks search with its options, in either form', () => {
+    expect(parseArgs(['runbooks', 'search', '--where', 'a', '--goal', 'b'])).toEqual({
+      kind: 'command',
+      command: 'runbooks-search',
+      where: 'a',
+      goal: 'b',
+    });
+    expect(parseArgs(['runbooks', 'search', '--goal=b', '--where=a', '--lang=en-GB'])).toEqual({
+      kind: 'command',
+      command: 'runbooks-search',
+      where: 'a',
+      goal: 'b',
+      lang: 'en-GB',
+    });
   });
 
   it('routes validate with the file to validate', () => {
@@ -71,6 +88,19 @@ describe('parseArgs', () => {
     [['validate'], 'validate needs a spec file'],
     [['runbooks'], 'runbooks needs an action: search'],
     [['runbooks', 'list'], 'unknown runbooks action: list'],
+    [['runbooks', 'search'], 'runbooks search needs --where'],
+    [['runbooks', 'search', '--where', 'a'], 'runbooks search needs --goal'],
+    [['runbooks', 'search', '--where', 'a', '--goal'], '--goal needs a value'],
+    [['runbooks', 'search', '--where', ' ', '--goal', 'b'], '--where is empty'],
+    [['runbooks', 'search', '--where', 'a', '--goal', 'b', '--all'], 'unknown option: --all'],
+    [
+      ['runbooks', 'search', '--where', 'a'.repeat(301), '--goal', 'b'],
+      '--where is longer than 300 characters',
+    ],
+    [
+      ['runbooks', 'search', '--where', 'a', '--goal', 'b', '--lang', 'english'],
+      '--lang is not a BCP-47 language tag',
+    ],
   ])('rejects %j', (argv, message) => {
     expect(parseArgs(argv)).toEqual({ kind: 'usage-error', message });
   });
@@ -95,7 +125,6 @@ describe('run', () => {
   it.each<[string[], Command, string]>([
     [[], 'serve', 'T-017'],
     [['hook', 'stop'], 'hook-stop', 'T-021'],
-    [['runbooks', 'search'], 'runbooks-search', 'T-016'],
     [['doctor'], 'doctor', 'T-021'],
   ])('reports %j as not implemented yet', (argv, command, task) => {
     const { code, err } = invoke(argv);
@@ -150,5 +179,93 @@ describe('validate', () => {
     expect(code).toBe(2);
     expect(out).toEqual([]);
     expect(err[0]).toContain('cannot read missing.json');
+  });
+});
+
+describe('runbooks search', () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'handoff-cli-'));
+    process.env['HANDOFF_HOME'] = home;
+  });
+
+  afterEach(() => {
+    delete process.env['HANDOFF_HOME'];
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  /** Copies the published runbook fixtures into the temporary HANDOFF_HOME. */
+  function installRunbooks(): void {
+    const folder = join(home, 'runbooks');
+    mkdirSync(folder);
+    const source = `${REPO}fixtures/runbooks/valid`;
+    for (const name of readdirSync(source)) {
+      writeFileSync(join(folder, name), readFileSync(join(source, name), 'utf8'), 'utf8');
+    }
+  }
+
+  function search(...argv: string[]): { code: number; out: string[]; err: string[] } {
+    return invoke(['runbooks', 'search', ...argv]);
+  }
+
+  it('prints the same {"runbooks": [...]} the tool returns, and exits 0', () => {
+    installRunbooks();
+    const { code, out, err } = search(
+      '--where',
+      'Stripe Dashboard > Developers > Webhooks',
+      '--goal',
+      'Set up Stripe webhook for payment notifications',
+      '--lang',
+      'en',
+    );
+
+    expect(err).toEqual([]);
+    expect(code).toBe(0);
+    const result = JSON.parse(out.join('\n')) as {
+      runbooks: { id: string; matched_words: string[]; values_to_fill: Record<string, unknown> }[];
+    };
+    expect(result.runbooks).toHaveLength(1);
+    expect(result.runbooks[0]?.id).toBe('rb_2b9x4d7fkq');
+    expect(result.runbooks[0]?.matched_words).toEqual(['stripe', 'webhook', 'payment']);
+    expect(Object.keys(result.runbooks[0]?.values_to_fill ?? {})).toEqual([
+      'endpoint_url',
+      'events',
+    ]);
+  });
+
+  it('prints an empty list when nothing matches, and when the folder is not there', () => {
+    installRunbooks();
+    expect(search('--where', 'Nowhere', '--goal', 'Nothing').out.join('\n')).toBe(
+      '{\n  "runbooks": []\n}',
+    );
+    rmSync(join(home, 'runbooks'), { recursive: true });
+    const { code, out } = search('--where', 'Nowhere', '--goal', 'Nothing');
+    expect(code).toBe(0);
+    expect(out.join('\n')).toBe('{\n  "runbooks": []\n}');
+  });
+
+  it('names a skipped file on stderr and still answers on stdout', () => {
+    installRunbooks();
+    writeFileSync(join(home, 'runbooks', 'broken.json'), '{ not json', 'utf8');
+
+    const { code, out, err } = search(
+      '--where',
+      'Stripe Dashboard → Developers → Webhooks',
+      '--goal',
+      'Register the Stripe webhook',
+    );
+    expect(code).toBe(0);
+    expect(err).toHaveLength(1);
+    expect(err[0]).toContain('broken.json');
+    expect((JSON.parse(out.join('\n')) as { runbooks: unknown[] }).runbooks).toHaveLength(1);
+  });
+
+  it('answers RUNBOOKS_UNREADABLE and exits 1 when the folder cannot be read', () => {
+    writeFileSync(join(home, 'runbooks'), 'a file where the folder should be', 'utf8');
+
+    const { code, out } = search('--where', 'a', '--goal', 'b');
+    expect(code).toBe(1);
+    expect(payload(out.join('\n')).error.code).toBe('RUNBOOKS_UNREADABLE');
   });
 });

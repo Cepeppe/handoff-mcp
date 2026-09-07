@@ -1,0 +1,22 @@
+{
+  "case": "lang-absent-uses-both-lists",
+  "why": "Without a lang the union of the shipped lists is used, so the Italian stop-words are dropped exactly as lang it would drop them.",
+  "query": {
+    "where": "Console Stripe → Sviluppatori → Webhook",
+    "goal": "Registrare il webhook per gli eventi di pagamento"
+  },
+  "runbooks": [
+    {
+      "id": "rb_a000000001",
+      "where": "Console Stripe → Sviluppatori → Webhook",
+      "goal": "Configurare il webhook dei pagamenti con gli eventi",
+      "last_verified_at": "2026-09-01T10:00:00Z"
+    }
+  ],
+  "expected": [
+    {
+      "id": "rb_a000000001",
+      "matched_words": ["webhook", "eventi"]
+    }
+  ]
+}

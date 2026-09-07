@@ -1,0 +1,18 @@
+{
+  "case": "short-tokens-dropped-no-match",
+  "why": "Tokens shorter than three characters are dropped, so two goals that share only `db` do not match.",
+  "query": {
+    "where": "Stripe Dashboard → Developers → Webhooks",
+    "goal": "Set up DB for the app",
+    "lang": "en"
+  },
+  "runbooks": [
+    {
+      "id": "rb_a000000001",
+      "where": "Stripe Dashboard → Developers → Webhooks",
+      "goal": "Configure DB replication",
+      "last_verified_at": "2026-09-01T10:00:00Z"
+    }
+  ],
+  "expected": []
+}
