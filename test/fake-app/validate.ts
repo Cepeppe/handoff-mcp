@@ -9,7 +9,8 @@
  * The validator is built exactly as `test/contract/channel.test.ts` builds it — the three
  * public schemas registered first, so the relative `$ref`s of the channel schema resolve
  * against their `$id`s without fetching anything — and it is memoised, because compiling
- * it costs more than every replay in this folder put together.
+ * it costs more than every replay in this folder put together. `FakeApp.start()` compiles
+ * it before the first connection, so no peer's budget ever pays for it.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

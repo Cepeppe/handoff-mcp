@@ -62,7 +62,7 @@ import {
   type ErrorReply,
   type Scenario,
 } from './scenario';
-import { channelViolation } from './validate';
+import { channelValidator, channelViolation } from './validate';
 
 /** §6.2: the first message must be `hello` within two seconds, or the app closes. */
 export const HELLO_TIMEOUT_MS = 2_000;
@@ -200,6 +200,11 @@ export class FakeApp {
 
   /** Starts listening. The returned instance is ready for a peer to connect. */
   static async start(options: FakeAppOptions = {}): Promise<FakeApp> {
+    // The channel validator is compiled once per process, and the first line a peer sends
+    // must not be what compiles it: the stop hook has 1 800 ms for everything it does, and
+    // on a slow runner the compile alone outlives that budget, so the hook goes neutral
+    // without ever sending `hook.stop`. Compile it here, while nobody's clock is running.
+    channelValidator();
     const ownsHome = options.home === undefined;
     // A Unix socket path has to fit in 104 bytes, and the per-user temporary folder of
     // macOS is long enough to make that a close call; `/tmp` is four characters on both.

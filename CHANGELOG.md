@@ -17,6 +17,13 @@ schema version, which is independent of the package version.
   it no longer cancels the push run of the same commit: `ci.yml` and `sea.yml` group their
   runs per event, so only a run superseded by a newer one of the same kind is cancelled.
 
+### Fixed
+
+- `test/fake-app` compiles its channel-schema validator when it starts, not on the first
+  line a peer sends. The stop hook has 1 800 ms for everything it does, and on the macOS
+  runner with Node 22 the compile alone outlived that budget, so the F-10 hook test went
+  neutral without a `hook.stop` while the same suite passed everywhere else.
+
 ## [0.2.0] - 2026-09-08
 
 The server is usable alone: validation, text mode, runbooks, channel client, hook, doctor,
