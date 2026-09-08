@@ -1,6 +1,6 @@
 {
   "name": "baton-handoff-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Contextual handoff MCP server: public spec/outcome/runbook formats and reference server",
   "license": "MIT",
   "author": "Cepeppe",
@@ -9,12 +9,16 @@
     "handoff-mcp": "dist/handoff-mcp.cjs"
   },
   "files": [
-    "dist/",
+    "dist/handoff-mcp.cjs",
     "schemas/",
     "patterns/",
+    "protocol/",
+    "fixtures/",
+    "keys/",
     "docs/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=22"

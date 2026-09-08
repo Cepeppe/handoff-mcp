@@ -135,7 +135,7 @@ answer that comes too late all print nothing and exit 0.
 ```console
 $ handoff-mcp doctor
 server
-  version                    0.1.0
+  version                    0.2.0
   protocol_version           1
   capabilities_version       1
   node                       v24.18.0

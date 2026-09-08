@@ -25,10 +25,11 @@ pnpm canary -- --list                          # what exists, without spending a
 system temporary directory with its own `HANDOFF_HOME`, so nothing touches `~/.handoff/`,
 and the report is written to `test/canary/results/last-run.json` (git-ignored).
 
-| Variable                | Effect                                                             |
-| ----------------------- | ------------------------------------------------------------------ |
-| `HANDOFF_CANARY_MODEL`  | The model to run against. Default `sonnet`, so a run stays cheap.  |
-| `HANDOFF_CANARY_KEEP=1` | Keeps each run's temporary project, for reading a failure by hand. |
+| Variable                | Effect                                                                                                                                        |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HANDOFF_CANARY_MODEL`  | The model to run against. Default `sonnet`, so a run stays cheap.                                                                             |
+| `HANDOFF_CANARY_KEEP=1` | Keeps each run's temporary project, for reading a failure by hand.                                                                            |
+| `HANDOFF_CANARY_SERVER` | The bundle the MCP entry runs, instead of `dist/handoff-mcp.cjs` of this checkout. A release points it at the tarball it is about to publish. |
 
 Two rules of the harness are not options. **`--strict-mcp-config` is always passed**, so a
 run can never reach the MCP servers configured on the machine it runs on; and `CLAUDECODE`

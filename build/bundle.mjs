@@ -22,6 +22,11 @@ const result = await esbuild.build({
   sourcemap: 'external',
   metafile: true,
   logLevel: 'info',
+  // `bin` points at this file, and npm decides how to launch a bin from its first line: with
+  // no shebang the shim it generates executes the file itself, so `npx baton-handoff-mcp`
+  // hands a CommonJS bundle to `/bin/sh` (a screen of syntax errors) or to cmd.exe (silence
+  // and exit 0). Node strips the line, including inside the SEA blob that embeds this file.
+  banner: { js: '#!/usr/bin/env node' },
   define: {
     // Consumed by src/main.ts: the version to print, and the flag that tells the entry
     // module it is the bundle and may start the CLI.

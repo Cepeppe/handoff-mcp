@@ -31,8 +31,25 @@ import {
 /** The repository root, from this file. */
 export const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
+/**
+ * Where the MCP entry's bundle comes from: `HANDOFF_CANARY_SERVER` when it names one,
+ * `dist/handoff-mcp.cjs` of this checkout otherwise.
+ *
+ * The override is how a release runs the scenarios against what it is about to publish
+ * rather than against the working tree: the M1 exit check of T-025 installs the packed
+ * tarball into a temporary folder and points this at the `dist/handoff-mcp.cjs` inside it.
+ * A blank value is no value, so a variable that is exported but empty falls back instead of
+ * producing an MCP entry that runs nothing.
+ */
+export function resolveServerBundle(env: NodeJS.ProcessEnv = process.env): string {
+  const override = env['HANDOFF_CANARY_SERVER']?.trim();
+  return override === undefined || override === ''
+    ? join(REPO_ROOT, 'dist', 'handoff-mcp.cjs')
+    : override;
+}
+
 /** The bundle the MCP entry runs. `pnpm build` produces it; the driver checks it exists. */
-export const SERVER_BUNDLE = join(REPO_ROOT, 'dist', 'handoff-mcp.cjs');
+export const SERVER_BUNDLE = resolveServerBundle();
 
 /** The recording Stop hook of A-05, A-06 and A-11. */
 export const STOP_HOOK = join(REPO_ROOT, 'test', 'canary', 'hooks', 'record-stop.mjs');

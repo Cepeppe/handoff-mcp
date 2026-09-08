@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The public formats (spec, outcome, runbook) and the tool contract carry their own
 schema version, which is independent of the package version.
 
-## [Unreleased]
+## [0.2.0] - 2026-09-08
+
+The server is usable alone: validation, text mode, runbooks, channel client, hook, doctor,
+docs. Registered in an MCP client with no overlay running, it validates a spec, masks the
+values that match a certain-secret pattern, searches the runbooks of `~/.handoff/` and hands
+the handoff back as text for the agent to walk the person through in the chat. With an
+overlay listening it opens a real handoff over the channel, blocks, heartbeats, resumes and
+transfers. The public formats and the channel definition are unchanged since `0.1.0`.
 
 ### Added
 
@@ -197,6 +204,18 @@ schema version, which is independent of the package version.
   while the server had no channel the process simply ran out of work and exited anyway, and
   that stopped being true as soon as a socket and a retry timer were holding it open. `serve`
   now watches stdin itself, which is also what triggers the goodbye on the channel.
+- `npx baton-handoff-mcp` did not start the server. The bundle `bin` points at carried no
+  shebang, and npm reads the first line of a bin target to decide how to launch it: the shim
+  it generates handed the CommonJS bundle to `/bin/sh`, which answered with a screen of
+  syntax errors and exit 2, and to `cmd.exe`, which printed nothing and exited 0. The
+  bundler now writes `#!/usr/bin/env node`, which Node strips, including inside the SEA
+  blob that embeds the same file.
+- The published package carried the whole of `dist/`, so a `pnpm pack` weighed 71.9 MB and
+  unpacked to 189.7 MB: the standalone executables, the SEA blob, the source map and every
+  format tarball a local build had left behind travelled with it. `files` now names the one
+  bundle `bin` points at, and gains `protocol/`, `fixtures/`, `keys/` and `CHANGELOG.md` so
+  that the relative links of the shipped `docs/` resolve inside the package as well as on
+  GitHub. `test/unit/package.test.ts` fails if either regresses.
 
 ## [0.1.0] - 2026-09-07
 

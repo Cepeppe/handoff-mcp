@@ -21,6 +21,7 @@ import {
   shouldRetry,
   type Assertion,
 } from '../../canary/classify.ts';
+import { REPO_ROOT, resolveServerBundle } from '../../canary/runner.ts';
 import { coveredIds, SCENARIOS } from '../../canary/scenarios/index.ts';
 import {
   childEnvironment,
@@ -223,5 +224,26 @@ describe('the scenario set', () => {
   it('keeps every scenario inside the turn budget the task Notes set', () => {
     const total = SCENARIOS.reduce((sum, scenario) => sum + scenario.options.maxTurns, 0);
     expect(total).toBeLessThanOrEqual(12 * SCENARIOS.length);
+  });
+});
+
+describe('which bundle the canary runs', () => {
+  const repoBundle = join(REPO_ROOT, 'dist', 'handoff-mcp.cjs');
+
+  it('is the working tree by default', () => {
+    expect(resolveServerBundle({})).toBe(repoBundle);
+  });
+
+  it('is what HANDOFF_CANARY_SERVER names, so a release can drive its own tarball', () => {
+    const packed = join('C:', 'temp', 'pack', 'dist', 'handoff-mcp.cjs');
+    expect(resolveServerBundle({ HANDOFF_CANARY_SERVER: packed })).toBe(packed);
+    expect(resolveServerBundle({ HANDOFF_CANARY_SERVER: `  ${packed}  ` })).toBe(packed);
+  });
+
+  it('falls back when the variable is exported but empty', () => {
+    // An empty value would otherwise register an MCP entry that runs nothing, and every
+    // scenario would fail for a reason that has nothing to do with the agent.
+    expect(resolveServerBundle({ HANDOFF_CANARY_SERVER: '' })).toBe(repoBundle);
+    expect(resolveServerBundle({ HANDOFF_CANARY_SERVER: '   ' })).toBe(repoBundle);
   });
 });
