@@ -1,0 +1,205 @@
+# Release watch: the assumption canaries and E2E-8 against the real Claude Code
+# (TECHNICAL-DESIGN §11.5, TASKS.md §0.4 items 3 and 9).
+#
+# `workflow_dispatch` only, and deliberately so. There is no schedule because the canary
+# needs a credential nobody has provisioned (T-024 is deferred): until then the owner runs
+# `pnpm canary` locally after every Claude Code update and records the result in
+# `docs/agent-facts.md`. The workflow exists so that turning the secret on is one step and
+# not one afternoon, and it **skips gracefully** rather than failing when the secret is
+# absent — a red run that only means "no key" teaches nobody anything.
+#
+# This repository runs the canaries the server can run alone. Everything that needs the
+# overlay — E2E-1..7, 9..11 — lives in `handoff-app`'s own canary workflow.
+name: Canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      macos:
+        description: 'Also run on macOS (10x minute multiplier)'
+        type: boolean
+        default: false
+      macos_runner:
+        description: 'macOS runner label'
+        type: string
+        default: macos-15
+      model:
+        description: 'Model to run the canaries against'
+        type: string
+        default: sonnet
+      open_issue:
+        description: 'Open an issue when a scenario fails'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canary
+  cancel-in-progress: false
+
+jobs:
+  # Which Claude Code version is current, and which runners this dispatch asked for.
+  #
+  # There is no changelog feed (A-22), so the npm dist-tag is the signal and
+  # `test/canary/last-claude-version` is what it is compared against. A difference is
+  # reported and never fails the job: the run that follows says whether it matters.
+  #
+  # The runner list is built here rather than written as a matrix, because macOS minutes
+  # cost ten times as much (§0.4 item 7) and must stay opt-in even inside a workflow that
+  # is already dispatch-only. The label is an input and not a literal: `macos-13` stopped
+  # receiving runners with no error at all (T-009), and changing a label must not mean
+  # editing this file.
+  plan:
+    name: Published version and runners
+    runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.version.outputs.published }}
+      pinned: ${{ steps.version.outputs.pinned }}
+      changed: ${{ steps.version.outputs.changed }}
+      runners: ${{ steps.runners.outputs.list }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: version
+        shell: bash
+        run: |
+          published="$(npm view @anthropic-ai/claude-code dist-tags.latest)"
+          pinned="$(tr -d '[:space:]' < test/canary/last-claude-version)"
+          echo "published=$published" >> "$GITHUB_OUTPUT"
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          if [ "$published" = "$pinned" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Claude Code is still \`$pinned\`." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Claude Code moved from \`$pinned\` to \`$published\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - id: runners
+        shell: bash
+        env:
+          WITH_MACOS: ${{ inputs.macos }}
+          MACOS_RUNNER: ${{ inputs.macos_runner }}
+        run: |
+          if [ "$WITH_MACOS" = "true" ]; then
+            list="[\"windows-latest\", \"$MACOS_RUNNER\"]"
+          else
+            list='["windows-latest"]'
+          fi
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "Runners: $list" >> "$GITHUB_STEP_SUMMARY"
+
+  canary:
+    name: ${{ matrix.os }}
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.plan.outputs.runners) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # No secret, no run. This is the deferred state of T-024 and it is not a failure:
+      # every later step is skipped and the summary says why.
+      - id: secret
+        shell: bash
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "ANTHROPIC_API_KEY is not configured: the canaries were skipped (T-024)." \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.secret.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+
+      # The canary runs the built bundle, which is what an installed server is.
+      - if: steps.secret.outputs.present == 'true'
+        run: pnpm build
+
+      - name: Install the published Claude Code
+        if: steps.secret.outputs.present == 'true'
+        run: npm install --global @anthropic-ai/claude-code@${{ needs.plan.outputs.published }}
+
+      - name: Run the canaries
+        if: steps.secret.outputs.present == 'true'
+        shell: bash
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          HANDOFF_CANARY_MODEL: ${{ inputs.model }}
+        run: pnpm canary
+
+      - name: Report
+        if: always() && steps.secret.outputs.present == 'true'
+        shell: bash
+        run: node build/canary-report.mjs >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the report
+        if: always() && steps.secret.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: canary-${{ matrix.os }}
+          path: test/canary/results/last-run.json
+          if-no-files-found: ignore
+
+  # The point of a release watch is to be told. The issue names the version and the failing
+  # assertions; the transcript is not in it, because a transcript is a conversation and this
+  # repository is public.
+  issue:
+    name: Open an issue for the failing assertions
+    needs: [plan, canary]
+    if: failure() && inputs.open_issue
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: canary-*
+          path: reports
+
+      - shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISHED: ${{ needs.plan.outputs.published }}
+          PINNED: ${{ needs.plan.outputs.pinned }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "Claude Code \`$PUBLISHED\` (pinned in \`test/canary/last-claude-version\`: \`$PINNED\`)."
+            echo
+            echo "Run: $RUN_URL"
+            echo
+            found=0
+            for report in $(find reports -name last-run.json 2>/dev/null | sort); do
+              found=1
+              echo "### $report"
+              echo
+              node build/canary-report.mjs "$report"
+              echo
+            done
+            if [ "$found" = "0" ]; then
+              echo "No report was produced: the run failed before the canaries started."
+            fi
+          } > body.md
+          gh issue create \
+            --title "Canary: assumptions failing against Claude Code $PUBLISHED" \
+            --body-file body.md

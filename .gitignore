@@ -11,6 +11,7 @@ build/out/
 coverage/
 .vitest/
 *.log
+test/canary/results/
 
 # Local environment
 .env

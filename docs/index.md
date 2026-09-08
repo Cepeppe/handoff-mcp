@@ -42,6 +42,7 @@ that the server can be built and tested from here alone, and it may change in an
 | Know what a version number promises                          | [Versions and compatibility](versioning.md)          |
 | Understand the socket between the server and an overlay      | [The internal channel](channel.md)                   |
 | Build the standalone executables                             | [Building the executables](build-sea.md)             |
+| Know which agent behaviours were measured, and when          | [Measured agent facts](agent-facts.md)               |
 
 ## What the server does, and what it does not
 
@@ -53,7 +54,10 @@ outcome carrying an `instruction` the agent can follow with nothing else.
 
 It **does not** click, type or read the screen; it makes no network connection of any kind;
 it calls no model; and it never writes a file of yours. Its only storage is what it reads:
-the runbook folder and the connection token under `~/.handoff/`.
+the runbook folder and the connection token under `~/.handoff/`. The single exception is a
+test switch nobody sets in normal use: with `HANDOFF_CANARY=1` the server registers one
+extra tool and records what it observed about the agent under `$HANDOFF_HOME/canary/`, which
+is how the facts in [measured agent facts](agent-facts.md) were obtained.
 
 An overlay application may connect to the server over a local socket to show the handoff to
 the user; that application is a separate, closed product, and this repository documents only

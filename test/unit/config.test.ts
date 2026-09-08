@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ENV_VAR_NAMES,
+  envNamesPresent,
   homeDir,
   homeOverride,
   readConfig,
@@ -26,7 +27,7 @@ function config(env: EnvRecord) {
 }
 
 describe('the declared variables', () => {
-  it('are the six of §5.3 in that order, then the two Windows names the pipe is built from', () => {
+  it('are the six of §5.3 in that order, the canary switch, then the two Windows names the pipe is built from', () => {
     expect(ENV_VAR_NAMES).toEqual([
       'HANDOFF_AGENT',
       'HANDOFF_TOOL_TIMEOUT_MS',
@@ -34,6 +35,7 @@ describe('the declared variables', () => {
       'HANDOFF_HOME',
       'CLAUDE_PROJECT_DIR',
       'HANDOFF_MCP_LOG',
+      'HANDOFF_CANARY',
       'USERDOMAIN',
       'USERNAME',
     ]);
@@ -171,5 +173,38 @@ describe('the home override', () => {
   it('is undefined when the variable is unset or blank', () => {
     expect(homeOverride({})).toBeUndefined();
     expect(homeOverride({ HANDOFF_HOME: '   ' })).toBeUndefined();
+  });
+});
+
+describe('the canary switch', () => {
+  it('is off unless HANDOFF_CANARY is exactly 1', () => {
+    expect(config({}).canary).toBe(false);
+    expect(config({ HANDOFF_CANARY: '0' }).canary).toBe(false);
+    expect(config({ HANDOFF_CANARY: 'true' }).canary).toBe(false);
+    expect(config({ HANDOFF_CANARY: '' }).canary).toBe(false);
+    expect(config({ HANDOFF_CANARY: ' 1 ' }).canary).toBe(true);
+    expect(config({ HANDOFF_CANARY: '1' }).canary).toBe(true);
+  });
+});
+
+describe('the presence lookup the canary probe uses (A-23)', () => {
+  const env: EnvRecord = { HANDOFF_PROBE: 'yes', HANDOFF_PROBE_TOKEN: ' ', CLAUDECODE: '1' };
+
+  it('answers with the names that are set, in the order it was asked', () => {
+    expect(envNamesPresent(['CLAUDECODE', 'HANDOFF_PROBE', 'HANDOFF_PROBE_TOKEN'], env)).toEqual([
+      'CLAUDECODE',
+      'HANDOFF_PROBE',
+    ]);
+  });
+
+  it('never answers with a value, whatever the variable holds', () => {
+    const answer = envNamesPresent(['HANDOFF_PROBE'], { HANDOFF_PROBE: 'sk_live_secret' });
+    expect(answer).toEqual(['HANDOFF_PROBE']);
+    expect(JSON.stringify(answer)).not.toContain('sk_live');
+  });
+
+  it('treats an unset or blank variable as absent', () => {
+    expect(envNamesPresent(['NOTHING_HERE'], env)).toEqual([]);
+    expect(envNamesPresent(['HANDOFF_PROBE_TOKEN'], env)).toEqual([]);
   });
 });

@@ -30,6 +30,7 @@
     "verify:release": "node build/verify-release.mjs",
     "test": "vitest run",
     "test:contract": "vitest run test/contract",
+    "canary": "node test/canary/main.ts",
     "check:links": "node build/check-links.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",

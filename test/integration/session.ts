@@ -50,6 +50,13 @@ export interface SessionOptions extends FakeAppOptions {
   readonly peerToken?: string;
   /** `HANDOFF_AGENT`. An id the table does not know resolves to the `unknown` row (§5.6). */
   readonly agent?: string;
+  /**
+   * `clientInfo.name` of the MCP handshake. It is `claude-code` by default because that is
+   * what Claude Code sends (A-08, measured in `docs/agent-facts.md`) and what the capability
+   * table now matches on. A case that wants the `unknown` row has to override **both** this
+   * and `agent`, since resolution falls through from one to the other (§5.6).
+   */
+  readonly clientName?: string;
 }
 
 export interface Session {
@@ -126,7 +133,10 @@ export async function session(options: SessionOptions = {}): Promise<Session> {
   });
 
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: 'claude-code', version: '2.1.263' });
+  const client = new Client({
+    name: options.clientName ?? 'claude-code',
+    version: '2.1.263',
+  });
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
   await client.listTools();
 

@@ -474,6 +474,10 @@ describe('the image block of §4.7.4', () => {
   it('is left out for a client the capability table says cannot show images', async () => {
     const active = await open({
       agent: 'an-agent-the-table-does-not-know',
+      // Both, and not only the first: with `client_names` now holding the measured
+      // `claude-code` (A-08), an unknown HANDOFF_AGENT falls through to the handshake and
+      // would resolve the full row again.
+      clientName: 'an-mcp-client-the-table-does-not-know',
       scenario: scripted('screenshot-no-image', 'The same event, an agent without images.', [
         { onOpen: { handoff_id: HANDOFF_ID } },
         {

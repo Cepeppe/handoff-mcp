@@ -115,6 +115,7 @@ $ handoff-mcp runbooks search --where "Stripe Dashboard > Developers > Webhooks"
 | [Versions and compatibility](docs/versioning.md)          | What each version number promises                         |
 | [The internal channel](docs/channel.md)                   | The local socket, its threat model, its lack of a promise |
 | [Building the executables](docs/build-sea.md)             | The standalone per-platform build                         |
+| [Measured agent facts](docs/agent-facts.md)               | What was measured against the real agent, and when        |
 
 The machine-readable contract is in [`schemas/`](schemas/): the three JSON Schemas and
 [`tool-contract.v1.md`](schemas/tool-contract.v1.md), from which the texts the server sends

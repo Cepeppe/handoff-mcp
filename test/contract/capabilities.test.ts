@@ -26,6 +26,7 @@ import {
   CAPABILITY_TABLE,
   capabilityRowForHello,
   resolveCapabilityRow,
+  resolveRow,
   UNKNOWN_AGENT_ID,
 } from '../../src/adapters';
 
@@ -91,7 +92,7 @@ describe('capabilities.json', () => {
       display_name: 'Claude Code',
       status: 'supported',
       support: 'full',
-      match: { env: 'claude-code', client_names: [] },
+      match: { env: 'claude-code', client_names: ['claude-code'] },
       tool_timeout_ms_default: null,
       per_server_timeout_field: 'timeout',
       images_in_results: true,
@@ -135,10 +136,21 @@ describe('capabilities.json', () => {
     }
   });
 
-  it('records no client name until the canary suite measures one (A-08)', () => {
+  it('records a client name only where the canary suite measured one (A-08)', () => {
+    // `claude-code` is what Claude Code 2.1.263 sends in the `initialize` handshake,
+    // measured by `test/canary` on 2026-09-08 and written down in `docs/agent-facts.md`.
+    // No other adapter has shipped, so no other list may hold a guess.
     for (const row of CAPABILITY_TABLE) {
-      expect(row.match.client_names).toEqual([]);
+      expect(row.match.client_names, row.agent_id).toEqual(
+        row.agent_id === 'claude-code' ? ['claude-code'] : [],
+      );
     }
+  });
+
+  it('keeps the measured client name resolving to its own row without HANDOFF_AGENT', () => {
+    // The point of measuring it (§5.6 step 2): an npm user who wrote the MCP entry by hand
+    // gets the full row instead of `unknown`.
+    expect(resolveRow({ clientName: 'claude-code' }).agent_id).toBe('claude-code');
   });
 
   it('keys the editor-hosted agents on the ancestor chain (ADPT-02, R-12)', () => {

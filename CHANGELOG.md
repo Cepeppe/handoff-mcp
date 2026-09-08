@@ -164,6 +164,31 @@ schema version, which is independent of the package version.
   repository's Markdown resolves, with links inside code fences and inline code left alone.
   `test/unit/docs-links.test.ts` runs it against trees built to break it, and checks that
   every documented page exists and is reachable from the index.
+- The canary harness of `test/canary/`: `pnpm canary` runs the real Claude Code against the
+  built bundle in a throw-away project and re-verifies the assumptions the server rests on
+  — registration before the first tool call, the `env` block of the MCP entry, the
+  `clientInfo` name, `CLAUDE_PROJECT_DIR`, the Stop hook payload and its blocking decision,
+  the hook's ancestor chain, both tool timeouts and the cancellation that follows them, and
+  the text-mode answer with no overlay listening. Each assertion says whether it looked at
+  the protocol or at the model, and only a model failure is retried, once.
+- `docs/agent-facts.md`: what the harness measured against Claude Code 2.1.263 on
+  2026-09-08, how to re-run it, and what is deliberately not measured.
+- The server takes part in its own canary: with `HANDOFF_CANARY=1` it registers a `sleep_ms`
+  test tool and writes an observation file under `$HANDOFF_HOME/canary/`, recording names
+  and resolved values and never the value of an environment variable. Without the variable
+  neither exists.
+- `.github/workflows/canary.yml`, `workflow_dispatch` only: it compares the npm dist-tag of
+  `@anthropic-ai/claude-code` against `test/canary/last-claude-version`, installs that
+  version, runs the scenarios and opens an issue with the failing assertions. It skips
+  gracefully while no API key is configured.
+
+### Changed
+
+- `src/adapters/capabilities.json` records the measured `clientInfo.name` of Claude Code,
+  `claude-code`, so a server installed by hand — with no `HANDOFF_AGENT` — resolves the full
+  row instead of `unknown`. `tool_timeout_ms_default` stays `null`: the canary can only
+  bound the default from below, and a lower bound in that field would make the heartbeat
+  arithmetic state something nobody measured.
 
 ### Fixed
 

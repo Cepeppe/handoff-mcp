@@ -32,6 +32,7 @@ export const ENV_VAR_NAMES = [
   'HANDOFF_HOME',
   'CLAUDE_PROJECT_DIR',
   'HANDOFF_MCP_LOG',
+  'HANDOFF_CANARY',
   'USERDOMAIN',
   'USERNAME',
 ] as const;
@@ -69,6 +70,12 @@ export interface Config {
   readonly projectDir: string;
   /** `HANDOFF_MCP_LOG`, `error` unless it says `debug`. */
   readonly logLevel: LogLevel;
+  /**
+   * `HANDOFF_CANARY=1`: the canary probe of `src/mcp/canary.ts` is on (T-023). It adds a
+   * test tool and writes an observation file under `home`, and it is off in every other
+   * run, including every test of this repository that does not set the variable.
+   */
+  readonly canary: boolean;
   /** Variables that were set to something unusable and are being treated as unset. */
   readonly ignored: readonly EnvVarName[];
 }
@@ -148,6 +155,26 @@ export function windowsUserKey(env: EnvRecord = process.env): string {
   return `${domain}\\${user}`.toLowerCase();
 }
 
+/**
+ * Which of `names` are set to something other than blank, **by name only**.
+ *
+ * The canary of T-023 has to report whether a variable reached the server without the
+ * server depending on it, and two of the names it asks about — `HANDOFF_PROBE` and
+ * `HANDOFF_PROBE_TOKEN` — exist precisely because one of them falls foul of A-23 and the
+ * other does not. Declaring them in `ENV_VAR_NAMES` would make the list fail the rule it
+ * exists to enforce, so this function looks names up dynamically instead: it is still the
+ * only module touching `process.env`, and the caller owns the list.
+ *
+ * It answers with names, never with values: a variable of the user's environment may hold
+ * anything, and nothing this returns is allowed to become a secret in a log (R-19).
+ */
+export function envNamesPresent(
+  names: readonly string[],
+  env: EnvRecord = process.env,
+): readonly string[] {
+  return names.filter((name) => (env[name] ?? '').trim() !== '');
+}
+
 /** Reads the whole environment once, at startup (§5.3). */
 export function readConfig(env: EnvRecord = process.env, cwd: string = process.cwd()): Config {
   const ignored: EnvVarName[] = [];
@@ -158,6 +185,7 @@ export function readConfig(env: EnvRecord = process.env, cwd: string = process.c
     home: homeDir(env),
     projectDir: readString(env, 'CLAUDE_PROJECT_DIR') ?? cwd,
     logLevel: readLogLevel(env, ignored),
+    canary: readString(env, 'HANDOFF_CANARY') === '1',
     ignored,
   };
 }

@@ -50,7 +50,7 @@ import {
 } from '../adapters';
 import { InFlightCalls, readSnapshot, type WaitOutcome } from '../calls';
 import { applicationErrorName, type ClientInfo, type JsonRpcParams } from '../channel';
-import type { Config } from '../config';
+import { envNamesPresent, type Config } from '../config';
 import {
   catalogueError,
   handoffError,
@@ -72,6 +72,7 @@ import {
 import { scanSpecSpans, toSecretTreated, type SecretTreated } from '../secrets';
 import { textModeOutcome } from '../textmode';
 
+import { createCanaryProbe, CANARY_PROBE_ENV_NAMES, type CanaryProbe } from './canary';
 import {
   ANNOTATIONS,
   TOOL_DESCRIPTIONS,
@@ -148,15 +149,22 @@ const OUTPUT_SCHEMAS: Readonly<Record<ToolName, unknown>> = {
 /**
  * The three tools as `tools/list` returns them: the generated description, the generated
  * input schema verbatim, the output schema of §4.3 and the annotations of §4.7.
+ *
+ * `extra` is empty in every ordinary run. It carries the canary probe's `sleep_ms` when
+ * `HANDOFF_CANARY=1` (T-023, §11.5), which is the only way an agent's tool timeout can be
+ * measured against our own server entry rather than against a stand-in.
  */
-export function toolDefinitions(): Tool[] {
-  return TOOL_NAMES.map((name) => ({
-    name,
-    description: TOOL_DESCRIPTIONS[name],
-    inputSchema: TOOL_INPUT_SCHEMAS[name] as unknown as Tool['inputSchema'],
-    outputSchema: OUTPUT_SCHEMAS[name] as Tool['outputSchema'],
-    annotations: ANNOTATIONS[name],
-  }));
+export function toolDefinitions(extra: readonly Tool[] = []): Tool[] {
+  return [
+    ...TOOL_NAMES.map((name) => ({
+      name,
+      description: TOOL_DESCRIPTIONS[name],
+      inputSchema: TOOL_INPUT_SCHEMAS[name] as unknown as Tool['inputSchema'],
+      outputSchema: OUTPUT_SCHEMAS[name] as Tool['outputSchema'],
+      annotations: ANNOTATIONS[name],
+    })),
+    ...extra,
+  ];
 }
 
 // ------------------------------------------------------------- errors from the channel
@@ -602,6 +610,11 @@ export function createServer(deps: ServerDeps): Server {
   // Built here rather than in `serve`, so that a test driving `createServer` over the
   // in-memory transport gets the same table and the same subscriptions as the product.
   const calls = new InFlightCalls({ channel: deps.channel, logger: deps.logger });
+  // `undefined` unless HANDOFF_CANARY=1, and then every use below is an optional chain.
+  const canary: CanaryProbe | undefined = createCanaryProbe({
+    enabled: deps.config.canary,
+    home: deps.config.home,
+  });
 
   const capabilityRow = (): ResolvedCapabilityRow =>
     resolveCapabilityRow({
@@ -619,16 +632,39 @@ export function createServer(deps: ServerDeps): Server {
       reason: timeout.source,
     });
     const info = server.getClientVersion();
+    // A-01, A-02, A-08, A-23, A-24 in one line: the instant registration was possible, the
+    // client the handshake named, what the server resolved from it, and which names of the
+    // MCP entry's `env` block actually arrived. Names only, never values.
+    canary?.record('initialize', {
+      client_name: info?.name ?? null,
+      client_version: typeof info?.version === 'string' ? info.version : null,
+      agent_id: row.agent_id,
+      support: row.support,
+      tool_timeout_ms: timeout.ms,
+      timeout_source: timeout.source,
+      env_present: envNamesPresent(CANARY_PROBE_ENV_NAMES),
+      project_dir_is_cwd: deps.config.projectDir === process.cwd(),
+      pid: process.pid,
+      ppid: process.ppid,
+      server_version: deps.version,
+    });
     deps.onInitialized?.(row, {
       name: info?.name ?? row.agent_id,
       version: typeof info?.version === 'string' ? info.version : '0.0.0',
     });
   };
 
-  server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: toolDefinitions() }));
+  server.setRequestHandler(ListToolsRequestSchema, () => {
+    canary?.record('tools_list');
+    return { tools: toolDefinitions(canary?.tools() ?? []) };
+  });
 
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const { name, arguments: args } = request.params;
+    canary?.record('tool_call', { method: name });
+    if (canary?.handles(name) === true) {
+      return await canary.call(name, args, extra.signal);
+    }
     const context: PipelineContext = {
       deps,
       calls,
@@ -637,6 +673,11 @@ export function createServer(deps: ServerDeps): Server {
     };
     const result = await dispatch(context, name, args);
     deps.logger.debug('tool_result', { method: name, ok: result.isError !== true });
+    canary?.record('tool_result', {
+      method: name,
+      ok: result.isError !== true,
+      status: outcomeStatus(result),
+    });
     return result;
   });
 
@@ -647,6 +688,18 @@ export function createServer(deps: ServerDeps): Server {
   };
 
   return server;
+}
+
+/**
+ * The `status` a tool result carried, for the canary's record. The status is a protocol
+ * fact of the outcome (§4.3) and never a spec value, which is why the probe may keep it:
+ * it is what E2E-8 asserts on when the app is not running.
+ */
+function outcomeStatus(result: CallToolResult): string | null {
+  const structured: unknown = result.structuredContent;
+  if (typeof structured !== 'object' || structured === null) return null;
+  const status: unknown = (structured as { status?: unknown }).status;
+  return typeof status === 'string' ? status : null;
 }
 
 /** Routes one `tools/call`. An unknown name is a protocol error, not a catalogue error. */
