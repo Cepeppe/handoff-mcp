@@ -361,7 +361,14 @@ describe('the channel client of T-018 against the fake', () => {
     const app = await startFake(scenario);
     const peer = client(app);
     peer.start();
-    await app.waitFor(() => app.sessions.length >= 2, 5_000, 'a second registration');
+    // The fake counts a session when it *writes* the hello answer and the peer counts one
+    // when it has *read* it, so waiting on either alone leaves a window in which the other
+    // has not caught up; on a fast runner that window is where a flake lives.
+    await app.waitFor(
+      () => app.sessions.length >= 2 && peer.isConnected(),
+      5_000,
+      'a second registration on both sides',
+    );
     expect(peer.isConnected()).toBe(true);
     expect(app.sessions[0]).not.toBe(app.sessions[1]);
   });
