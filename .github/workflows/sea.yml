@@ -24,8 +24,10 @@ on:
 permissions:
   contents: read
 
+# One group per event and ref, as in `ci.yml`: a dispatch, which is how the darwin legs
+# run, must not cancel the push run of the commit it is checking.
 concurrency:
-  group: sea-${{ github.ref }}
+  group: sea-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

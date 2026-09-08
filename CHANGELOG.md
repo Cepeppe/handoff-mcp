@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The public formats (spec, outcome, runbook) and the tool contract carry their own
 schema version, which is independent of the package version.
 
+## [Unreleased]
+
+### Changed
+
+- `.github/workflows/ci.yml` runs on pushes to `main`, on pull requests and on dispatch; a
+  tag no longer runs it a second time next to the release workflow. A dispatch runs the
+  macOS leg alone, unless the `full` input asks for the ubuntu/windows matrix as well, and
+  it no longer cancels the push run of the same commit: `ci.yml` and `sea.yml` group their
+  runs per event, so only a run superseded by a newer one of the same kind is cancelled.
+
 ## [0.2.0] - 2026-09-08
 
 The server is usable alone: validation, text mode, runbooks, channel client, hook, doctor,

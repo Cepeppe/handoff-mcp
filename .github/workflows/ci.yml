@@ -1,19 +1,35 @@
 name: CI
 
+# A tag push would otherwise run this whole matrix a second time, on top of the release
+# workflow the tag already triggers, so pushes are filtered to `main`. A `workflow_dispatch`
+# exists to run the macOS leg, which is dispatch-only while macOS is deferred (TASKS.md
+# §0.4 item 7): the push run of the same commit already has the ubuntu and windows
+# results, so a dispatch skips that matrix unless it is asked for.
 on:
   push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
+    inputs:
+      full:
+        description: 'Also run the ubuntu/windows matrix; a push already covers it'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+# One group per event and ref: a newer push cancels the superseded push run, a newer
+# dispatch the superseded dispatch, and a dispatch never cancels the push run of the
+# commit it is checking, which one group shared by both events would make it do.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   check:
     name: ${{ matrix.os }} · node ${{ matrix.node }}
+    if: github.event_name != 'workflow_dispatch' || inputs.full
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -40,7 +56,7 @@ jobs:
         run: node dist/handoff-mcp.cjs --version
 
   # macOS is deferred (TASKS.md §0.4 item 7) and its minutes cost 10x, so this leg runs
-  # only when it is dispatched by hand.
+  # only when it is dispatched by hand; T-060 makes it run on every push.
   check-macos:
     name: macos-latest · node ${{ matrix.node }}
     if: github.event_name == 'workflow_dispatch'
