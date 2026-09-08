@@ -22,10 +22,13 @@
  */
 import { readFileSync } from 'node:fs';
 
+import { capabilityRowForHello, resolveCapabilityRow, toolTimeoutMs } from './adapters';
+import { ChannelClient } from './channel';
 import { readConfig } from './config';
 import { errorJson, handoffError, validateSpec, type HandoffSpec } from './format';
 import { createLogger } from './log';
-import { NullChannel, serve } from './mcp';
+import { serve } from './mcp';
+import { resolveProcessIdentity } from './platform';
 import { defaultRunbookRoots, RunbookStore, searchRunbooks } from './runbooks';
 
 /**
@@ -308,21 +311,63 @@ function runRunbooksSearch(query: RunbooksSearchArgs, streams: CliStreams): numb
 /**
  * `handoff-mcp serve`: the three MCP tools over stdio (§5.3).
  *
- * The channel to the app is `NullChannel` until T-020 plugs the real client in, so every
- * call takes the degraded path of §5.2 step 4: an open comes back as text mode, everything
- * that needs the handoff's state as `APP_DISCONNECTED`. The runbook store gets the CLI's
- * own stderr as its warning sink, so a file it has to skip is named for the person reading
- * the session rather than swallowed (§5.10).
+ * The order is the one §5.3 writes down. The process identity is resolved first, because
+ * `hello` carries it and it costs one `ps` on macOS and nothing anywhere else. The transport
+ * then starts serving, and the channel starts connecting from `onInitialized` — after the
+ * MCP handshake, because `hello` also carries the `client` the handshake names and the
+ * capability row §5.6 resolves from it. That is still session start and not the first tool
+ * call (SRV-20): `initialize` is the first thing an MCP client does, and until the socket
+ * answers, every call degrades to text mode on its own (FM-02, §5.9).
+ *
+ * Connecting is not awaited. The app may be absent for the whole session and the retry never
+ * gives up, so a `serve` that waited for a socket would be a `serve` that never served.
+ *
+ * When `serve` returns, the agent has closed stdin. `close()` is the `session.bye` of §5.3,
+ * best effort, and the process then exits 0.
+ *
+ * The runbook store gets the CLI's own stderr as its warning sink, so a file it has to skip
+ * is named for the person reading the session rather than swallowed (§5.10).
  */
-function runServe(streams: CliStreams): Promise<number> {
+async function runServe(streams: CliStreams): Promise<number> {
   const config = readConfig();
-  return serve({
-    config,
-    version: VERSION,
-    channel: NullChannel,
-    runbooks: new RunbookStore(defaultRunbookRoots(), { warn: streams.err }),
-    logger: createLogger(config.logLevel, streams.err),
+  const logger = createLogger(config.logLevel, streams.err);
+  const identity = await resolveProcessIdentity();
+  const row = resolveCapabilityRow({ agent: config.agent });
+
+  const channel = new ChannelClient({
+    identity: {
+      pid: identity.pid,
+      ppid: identity.ppid,
+      ancestors: identity.ancestors,
+      cwd: process.cwd(),
+      project_dir: config.projectDir,
+    },
+    agentId: row.agent_id,
+    client: { name: row.agent_id, version: VERSION },
+    capabilityRow: capabilityRowForHello(row, toolTimeoutMs(row, config)),
+    serverVersion: VERSION,
+    logger,
   });
+
+  try {
+    return await serve({
+      config,
+      version: VERSION,
+      channel,
+      runbooks: new RunbookStore(defaultRunbookRoots(), { warn: streams.err }),
+      logger,
+      onInitialized: (resolved, client) => {
+        channel.describeSession({
+          agentId: resolved.agent_id,
+          client,
+          capabilityRow: capabilityRowForHello(resolved, toolTimeoutMs(resolved, config)),
+        });
+        channel.start();
+      },
+    });
+  } finally {
+    await channel.close();
+  }
 }
 
 /** Routes one invocation and returns the process exit code, or a promise for it. */

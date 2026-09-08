@@ -26,13 +26,16 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import outcomeSchema from '../../schemas/handoff-outcome.v1.schema.json';
 import specSchema from '../../schemas/handoff-spec.v1.schema.json';
 import type { ResolvedCapabilityRow } from '../adapters';
-import { errorJson, type HandoffError } from '../format/errors';
+import type { ChannelFailure } from '../channel';
+import { catalogueFix, errorJson, type HandoffError } from '../format/errors';
 import type { RunbookMatch } from '../runbooks';
 import type { SecretTreated } from '../secrets';
 
 import {
+  ERROR_TEXTS,
   ID_PLACEHOLDER,
   INSTRUCTIONS,
+  OUTCOME_STATUSES,
   STATUS_FINAL,
   type HookVariant,
   type JsonSchema,
@@ -228,6 +231,29 @@ export function renderError(error: HandoffError): CallToolResult {
   return { content: [{ type: 'text', text: errorJson(error) }], isError: true };
 }
 
+/**
+ * FM-10 and FM-11: text mode **with the right fix text**.
+ *
+ * A channel that is refusing the token or speaking another protocol version is not the same
+ * degradation as an app that is simply not running, and the design says the agent is told
+ * which it is. The status stays `text_mode` — the handoff still happens in chat, exactly as
+ * SRV-14 says — so the outcome is untouched: the sentence goes in a second **text** block
+ * instead. It carries the catalogue's own message and fix for `CHANNEL_AUTH_FAILED` or
+ * `PROTOCOL_MISMATCH`, so what the agent reads here and what it would read from the matching
+ * error result are one text, written once, in the generated contract.
+ *
+ * `content[1]` is where §4.3 puts the image block, and there is no image in text mode, so
+ * the two can never both be there.
+ */
+export function withChannelFailure(
+  result: CallToolResult,
+  failure: ChannelFailure | undefined,
+): CallToolResult {
+  if (failure === undefined) return result;
+  const text = `${ERROR_TEXTS[failure].message} ${catalogueFix(failure)}`;
+  return { ...result, content: [...result.content, { type: 'text', text }] };
+}
+
 // ------------------------------------------------------------------ outcome builders
 
 /**
@@ -269,4 +295,94 @@ export function runbookMatchOutcome(
     runbooks,
     spec_text: null,
   };
+}
+
+/**
+ * An outcome about a handoff that the server writes on its own, because the app was not
+ * asked and has nothing to say: the `in_progress` of a heartbeat (TOOL-06) and the
+ * `transferred_to_other_session` of a call this same server displaced (TOOL-08).
+ *
+ * Every field the app would have filled — the round, the step, the notes — is left at the
+ * empty value §4.3 reserves for "not applicable", because inventing one would tell the
+ * agent something nobody measured. `app_reachable` stays true: the app is there, it is this
+ * call that stopped waiting.
+ */
+export function serverOutcome(status: OutcomeStatus, handoffId: string): Outcome {
+  return {
+    outcome_version: 1,
+    handoff_id: handoffId,
+    status,
+    final: STATUS_FINAL[status],
+    instruction: instructionFor(status, 'stop_hook', handoffId),
+    round: 1,
+    current_step: null,
+    user_text: null,
+    screenshot: null,
+    context: null,
+    skipped_steps: [],
+    notes: [],
+    secret_treated: [],
+    verify: null,
+    deferral_count: 0,
+    resumed_from: null,
+    app_reachable: true,
+    already_delivered: false,
+    runbooks: [],
+    spec_text: null,
+  };
+}
+
+// ------------------------------------------------------- outcomes that came over the channel
+
+/** The value §4.3 gives each field when it does not apply, so none is ever absent (TOOL-13). */
+const OUTCOME_DEFAULTS = {
+  handoff_id: null,
+  round: 1,
+  current_step: null,
+  user_text: null,
+  screenshot: null,
+  context: null,
+  skipped_steps: [],
+  notes: [],
+  secret_treated: [],
+  verify: null,
+  deferral_count: 0,
+  resumed_from: null,
+  app_reachable: true,
+  already_delivered: false,
+  runbooks: [],
+  spec_text: null,
+} as const;
+
+function isStatus(value: unknown): value is OutcomeStatus {
+  return (OUTCOME_STATUSES as readonly unknown[]).includes(value);
+}
+
+/**
+ * Reads the outcome the app sent into the shape the tool returns (§4.3, §6.3).
+ *
+ * The app is the authority on what happened, so its fields are taken as they are; but the
+ * published outcome schema is **closed** and every field of it is required, so a key the
+ * schema does not know is dropped and a key the app left out takes the empty value of the
+ * table above. That is what "the server tolerates unknown fields in a result" (§6.3) has to
+ * mean on this side: tolerate them, and still answer the agent with something that validates
+ * against the `outputSchema` the tool declared.
+ *
+ * `status` is the one field that cannot be defaulted: it chooses the instruction and `final`,
+ * both of which `renderOutcome` recomputes from the contract. An outcome without a status we
+ * know is not an outcome, and the caller answers `INTERNAL`.
+ */
+export function outcomeFromChannel(raw: Record<string, unknown>): Outcome | undefined {
+  const status = raw['status'];
+  if (!isStatus(status)) return undefined;
+
+  const picked: Record<string, unknown> = { outcome_version: 1, status };
+  for (const [name, fallback] of Object.entries(OUTCOME_DEFAULTS)) {
+    picked[name] = raw[name] === undefined ? fallback : raw[name];
+  }
+  // `final` and `instruction` are recomputed by `renderOutcome` from the contract; they are
+  // filled here only so what comes out is a complete `Outcome`.
+  picked['final'] = STATUS_FINAL[status];
+  picked['instruction'] = instructionFor(status, 'stop_hook', null);
+  return picked as unknown as Outcome;
 }

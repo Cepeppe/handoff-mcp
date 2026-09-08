@@ -115,6 +115,12 @@ export interface EmitEvent {
   readonly outcome: JsonObject;
   /** Defaults to the handoff this connection is working on; the call is always the live one. */
   readonly handoff_id: string | undefined;
+  /**
+   * The base64 PNG of a screenshot the user sent as an image, beside the outcome (§6.6): the
+   * published outcome is closed and carries no pixels. No golden has one, because a fixture
+   * with a real screenshot in it would be a fixture nobody can read.
+   */
+  readonly image: string | undefined;
   readonly afterMs: number;
 }
 
@@ -300,6 +306,8 @@ export function scenarioFromGolden(file: string, afterMs = 0): DerivedScenario {
           kind: 'emitEvent',
           outcome,
           handoff_id: typeof eventHandoff === 'string' ? eventHandoff : undefined,
+          // No golden carries pixels; a hand-written scenario is where an image comes from.
+          image: typeof params['image'] === 'string' ? params['image'] : undefined,
           afterMs,
         });
       } else if (method === 'app.shutdown') {
@@ -491,10 +499,15 @@ export function parseAction(value: unknown, where: string): Action {
       const outcome = body['outcome'];
       if (!isObject(outcome)) throw new Error(`${where}: emitEvent needs an "outcome"`);
       const handoffId = body['handoff_id'];
+      const image = body['image'];
+      if (image !== undefined && typeof image !== 'string') {
+        throw new Error(`${where}: emitEvent "image" must be base64 PNG`);
+      }
       return {
         kind: 'emitEvent',
         outcome,
         handoff_id: typeof handoffId === 'string' ? handoffId : undefined,
+        image,
         afterMs,
       };
     }

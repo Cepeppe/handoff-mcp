@@ -87,6 +87,13 @@
     "outcome": {
       "$ref": "../../schemas/handoff-outcome.v1.schema.json"
     },
+    "image": {
+      "description": "The screenshot the user chose to send, base64 PNG, travelling beside the outcome whose screenshot.mode is \"image\" (§6.6). The published outcome schema is closed and carries no pixels, so this is where they cross; the server holds them only for the duration of the tool result.",
+      "type": "string",
+      "minLength": 1,
+      "contentEncoding": "base64",
+      "contentMediaType": "image/png"
+    },
     "secret_treated": {
       "$ref": "../../schemas/handoff-outcome.v1.schema.json#/properties/secret_treated"
     },
@@ -285,6 +292,7 @@
       "properties": {
         "state": { "$ref": "#/$defs/handoff_state" },
         "outcome": { "anyOf": [{ "$ref": "#/$defs/outcome" }, { "type": "null" }] },
+        "image": { "$ref": "#/$defs/image" },
         "resumed_from": { "$ref": "#/$defs/resumed_from" }
       }
     },
@@ -352,7 +360,8 @@
       "properties": {
         "call_id": { "$ref": "#/$defs/call_id" },
         "handoff_id": { "$ref": "#/$defs/handoff_id" },
-        "outcome": { "$ref": "#/$defs/outcome" }
+        "outcome": { "$ref": "#/$defs/outcome" },
+        "image": { "$ref": "#/$defs/image" }
       }
     },
     "app_shutdown_params": {

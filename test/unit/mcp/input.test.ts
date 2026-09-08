@@ -12,6 +12,9 @@ import { ERROR_TEXTS } from '../../../src/mcp/generated/contract';
 import {
   inferShape,
   parseRunbooksQuery,
+  parseVerifyInput,
+  DETAIL_MAX_LENGTH,
+  DETAIL_MIN_LENGTH,
   QUERY_MAX_LENGTH,
   REGISTERED_HANDOFF_ID_PATTERNS,
   REPLY_MAX_LENGTH,
@@ -258,5 +261,81 @@ describe('the handoff_runbooks query', () => {
     const long = { where: 'x'.repeat(QUERY_MAX_LENGTH + 1), goal: 'y' };
     expect(parseRunbooksQuery(long).ok).toBe(false);
     expect(parseRunbooksQuery({ ...long, where: 'x'.repeat(QUERY_MAX_LENGTH) }).ok).toBe(true);
+  });
+});
+
+/**
+ * `handoff_verify` has one shape (§4.7.2), so arguments that do not fit its registered schema
+ * are a protocol violation and not one of the catalogue's errors — the same rule
+ * `handoff_runbooks` follows. `NO_VERIFY_IN_SPEC` and `HANDOFF_NOT_FOUND` are answers *about*
+ * a handoff and stay in the catalogue; a `verify` that is not an object is about nothing.
+ */
+describe('parseVerifyInput', () => {
+  it('reads the three values of a report', () => {
+    expect(parseVerifyInput({ handoff_id: ID, verify: { ok: true, detail: 'it works' } })).toEqual({
+      ok: true,
+      input: { handoffId: ID, ok: true, detail: 'it works' },
+    });
+  });
+
+  it.each([true, false, null])('accepts ok = %s, which is the honest answer set', (ok) => {
+    const parsed = parseVerifyInput({ handoff_id: ID, verify: { ok, detail: 'what I ran' } });
+    expect(parsed).toMatchObject({ ok: true, input: { ok } });
+  });
+
+  it.each([
+    ['arguments that are not an object', 'x', 'the arguments are not a JSON object'],
+    [
+      'an id that is not one',
+      { handoff_id: 'hf_short', verify: { ok: true, detail: 'x' } },
+      'handoff_id is not a handoff id',
+    ],
+    ['no verify at all', { handoff_id: ID }, 'verify is not an object'],
+    [
+      'an ok that is not one of the three',
+      { handoff_id: ID, verify: { ok: 'yes', detail: 'x' } },
+      'verify.ok is not true, false or null',
+    ],
+    [
+      'an empty detail',
+      { handoff_id: ID, verify: { ok: true, detail: '' } },
+      `verify.detail must be a string of ${String(DETAIL_MIN_LENGTH)} to ${String(DETAIL_MAX_LENGTH)} characters`,
+    ],
+    [
+      'a field the tool does not have',
+      { handoff_id: ID, verify: { ok: true, detail: 'x' }, late: true },
+      'handoff_verify has no field late',
+    ],
+    [
+      'a field verify does not have',
+      { handoff_id: ID, verify: { ok: true, detail: 'x', at: 'now' } },
+      'verify has no field at',
+    ],
+  ])('refuses %s', (_name, input, problem) => {
+    expect(parseVerifyInput(input)).toEqual({ ok: false, problem });
+  });
+
+  it('holds the detail to the bound the registered schema declares', () => {
+    const long = {
+      handoff_id: ID,
+      verify: { ok: true, detail: 'x'.repeat(DETAIL_MAX_LENGTH + 1) },
+    };
+    expect(parseVerifyInput(long).ok).toBe(false);
+    expect(
+      parseVerifyInput({
+        handoff_id: ID,
+        verify: { ok: true, detail: 'x'.repeat(DETAIL_MAX_LENGTH) },
+      }).ok,
+    ).toBe(true);
+  });
+
+  it('never echoes a detail back, because a detail can quote anything (R-19)', () => {
+    const parsed = parseVerifyInput({
+      handoff_id: ID,
+      verify: { ok: true, detail: 'sk_live_0123456789abcdefgh reached the endpoint' },
+      stray: 1,
+    });
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) expect(parsed.problem).not.toContain('sk_live');
   });
 });

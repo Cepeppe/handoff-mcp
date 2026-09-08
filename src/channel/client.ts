@@ -145,6 +145,18 @@ export interface ChannelClientOptions {
   readonly backoff?: readonly number[];
 }
 
+/**
+ * What `hello` says about the session (§5.6, §6.3). §5.3 resolves it from the MCP
+ * `initialize`, which happens after this object is built, so it is settable: `serve`
+ * describes the session and only then starts connecting. A description given between two
+ * attempts applies to the next `hello`, because `helloParams` reads it every time.
+ */
+export interface ChannelSession {
+  readonly agentId: string;
+  readonly client: ClientInfo;
+  readonly capabilityRow: HelloCapabilityRow;
+}
+
 interface Pending {
   readonly method: string;
   readonly resolve: (result: JsonRpcParams) => void;
@@ -156,6 +168,7 @@ const defaultConnect: ChannelConnect = (endpoint) => netConnect({ path: endpoint
 
 export class ChannelClient {
   private readonly options: ChannelClientOptions;
+  private session: ChannelSession;
   private readonly resolveToken: () => TokenRead;
   private readonly endpointOf: () => Endpoint;
   private readonly connect: ChannelConnect;
@@ -188,6 +201,11 @@ export class ChannelClient {
 
   constructor(options: ChannelClientOptions) {
     this.options = options;
+    this.session = {
+      agentId: options.agentId,
+      client: options.client,
+      capabilityRow: options.capabilityRow,
+    };
     this.logger = options.logger;
     this.connect = options.connect ?? defaultConnect;
     this.backoff = options.backoff ?? BACKOFF_SCHEDULE_MS;
@@ -227,6 +245,15 @@ export class ChannelClient {
     return () => {
       set.delete(listener);
     };
+  }
+
+  /**
+   * Replaces what `hello` says about this session. §5.3 resolves the capability row from the
+   * `clientInfo` of the MCP `initialize`, which arrives after this object exists, so `serve`
+   * calls this and then `start()`; the constructor's values are what the server knew before.
+   */
+  describeSession(session: ChannelSession): void {
+    this.session = session;
   }
 
   /** Connects now and keeps reconnecting until `close` (§5.3). Calling it twice is a no-op. */
@@ -336,7 +363,8 @@ export class ChannelClient {
    * schema check of `test/contract/channel.test.ts`.
    */
   private helloParams(token: string): JsonRpcParams {
-    const { identity, agentId, client, capabilityRow, serverVersion } = this.options;
+    const { identity, serverVersion } = this.options;
+    const { agentId, client, capabilityRow } = this.session;
     return {
       protocol_version: PROTOCOL_VERSION,
       token,
@@ -633,16 +661,23 @@ function reasonOf(cause: unknown): string {
   return cause instanceof Error ? cause.name : 'unknown';
 }
 
-/** The three fields of `handoff.event`; the outcome itself is T-020's to read. */
+/**
+ * The fields of `handoff.event`; the outcome itself is read by the calls layer. The image
+ * is passed through as it arrived and never decoded here: this module moves JSON-RPC and
+ * decides nothing about handoffs, and base64 that is not a PNG is the app's mistake to
+ * make, not something a framing layer can improve on.
+ */
 function asHandoffEvent(params: JsonRpcParams): HandoffEventParams | undefined {
   const callId = params['call_id'];
   const handoffId = params['handoff_id'];
   const outcome = params['outcome'];
+  const image = params['image'];
   if (typeof callId !== 'string' || typeof handoffId !== 'string') return undefined;
   if (typeof outcome !== 'object' || outcome === null || Array.isArray(outcome)) return undefined;
   return {
     call_id: callId,
     handoff_id: handoffId,
     outcome: outcome as Record<string, unknown>,
+    ...(typeof image === 'string' ? { image } : {}),
   };
 }

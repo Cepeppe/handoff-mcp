@@ -164,10 +164,16 @@ function textProblems(path: string, text: string): Problem[] {
  *
  * `root` is `steps` for a spec and `replacement_steps` for the steps of a continue call, so
  * the path an agent reads is the path it sent.
+ *
+ * `knownValueKeys` is `null` when the caller does not hold the spec these steps belong to,
+ * which is the case of a continue on a handoff this server never opened (a resume works from
+ * any session, TOOL-08). S3 is then **skipped here and performed by the app**, which does
+ * hold the spec and answers `unknown_value_key` (Â§5.2 step 3). It is not a weaker check, only
+ * one run in the one place where the keys exist; S4, S5 and S6 need no keys and still run.
  */
 export function stepProblems(
   steps: unknown,
-  knownValueKeys: readonly string[],
+  knownValueKeys: readonly string[] | null,
   root: string,
 ): Problem[] {
   const list = asArray(steps);
@@ -191,12 +197,15 @@ export function stepProblems(
     const cited = asArray(step['values']);
     const container = childPath(at, 'values');
     if (cited !== null) {
-      cited.forEach((key, position) => {
-        if (typeof key !== 'string' || knownValueKeys.includes(key)) return;
-        problems.push(
-          unknownValueKeyProblem(childPath(container, position), key, container, knownValueKeys),
-        );
-      });
+      const known = knownValueKeys;
+      if (known !== null) {
+        cited.forEach((key, position) => {
+          if (typeof key !== 'string' || known.includes(key)) return;
+          problems.push(
+            unknownValueKeyProblem(childPath(container, position), key, container, known),
+          );
+        });
+      }
     }
 
     const warning = step['warning'];

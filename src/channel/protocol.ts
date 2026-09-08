@@ -51,6 +51,32 @@ export const AUTH_FAILED_CODE = -32001;
 export const PROTOCOL_UNSUPPORTED_CODE = -32002;
 
 /**
+ * The five application errors of §6.3, numbered in `protocol/channel/README.md` because the
+ * design names them without giving them codes (`DEVIATIONS.md`, T-007). The name also
+ * travels in `message`, but the **code alone** is what the pipeline maps to the error
+ * catalogue of §4.7.5: a sentence is a thing to read, a number is a thing to branch on.
+ * `test/contract/channel.test.ts` pins these against the README table.
+ */
+export const APPLICATION_ERROR_CODES = {
+  unknown_value_key: -32010,
+  not_waiting: -32011,
+  final: -32012,
+  no_verify_in_spec: -32013,
+  not_found: -32014,
+} as const;
+
+/** The name of one of the five application errors, as `message` carries it. */
+export type ApplicationErrorName = keyof typeof APPLICATION_ERROR_CODES;
+
+/** Which application error a JSON-RPC code names, or nothing when it names none. */
+export function applicationErrorName(code: number): ApplicationErrorName | undefined {
+  for (const [name, value] of Object.entries(APPLICATION_ERROR_CODES)) {
+    if (value === code) return name as ApplicationErrorName;
+  }
+  return undefined;
+}
+
+/**
  * How a failure to register is reported to the tool pipeline: the two codes of the error
  * catalogue (§4.7.5) whose fix text tells the user what to repair. `CHANNEL_AUTH_FAILED`
  * covers a rejected token and a token file that is missing or unreadable alike (FM-10):
@@ -80,11 +106,18 @@ export interface HelloResult {
   readonly session_ref: string | null;
 }
 
-/** The payload of the `handoff.event` notification (§6.3). */
+/**
+ * The payload of the `handoff.event` notification (§6.3).
+ *
+ * `image` is the base64 PNG of a screenshot the user sent as an image: the published
+ * outcome is a closed object and carries no pixels, so they travel beside it (§6.6,
+ * `protocol/channel/README.md`). It is absent on every other event.
+ */
 export interface HandoffEventParams {
   readonly call_id: string;
   readonly handoff_id: string;
   readonly outcome: Record<string, unknown>;
+  readonly image?: string;
 }
 
 /** The payload of the `app.shutdown` notification (§6.3). */

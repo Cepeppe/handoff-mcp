@@ -10,6 +10,9 @@ export * from './generated/contract';
 export {
   inferShape,
   parseRunbooksQuery,
+  parseVerifyInput,
+  DETAIL_MAX_LENGTH,
+  DETAIL_MIN_LENGTH,
   INPUT_FIELDS,
   LANG_PATTERN,
   QUERY_MAX_LENGTH,
@@ -25,14 +28,19 @@ export type {
   RunbooksQuery,
   ShapeInference,
   ShapeKind,
+  VerifyInput,
+  VerifyParse,
 } from './input';
 export {
   hookVariant,
   instructionFor,
+  outcomeFromChannel,
   renderError,
   renderOutcome,
   renderRunbooks,
   runbookMatchOutcome,
+  serverOutcome,
+  withChannelFailure,
   OUTCOME_OUTPUT_SCHEMA,
   RUNBOOKS_OUTPUT_SCHEMA,
 } from './outcome';

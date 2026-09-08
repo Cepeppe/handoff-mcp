@@ -25,6 +25,15 @@ do what it says. Mistakes come back as `{ "error": { "code", "message", "problem
 a path and a fix per problem, never quoting the spec. `schemas/tool-contract.v1.md` is the
 contract, and it is what the descriptions the agent reads are generated from.
 
+With the overlay application listening, the call **blocks** while the person works and
+returns on the first thing that needs you: a question, a screenshot, a deferral, the end of
+the handoff. Two answers are not the end of it. `in_progress` is the heartbeat — it arrives
+shortly before your own tool timeout so the call ends on our terms rather than being cut off,
+and the instruction tells you to call `resume` at once. `deferred` means carry on with
+something else and resume before you conclude. A resume works from any session, and resuming
+a handoff that is already finished returns its outcome again with `already_delivered: true`,
+so retrying is always safe.
+
 Without the overlay application listening, the server still works: an open answers
 `status: text_mode` with the spec rendered as text — every value the certain-secret patterns
 matched masked out — so the handoff happens in the chat. Nothing is logged and no verified

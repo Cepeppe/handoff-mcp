@@ -11,6 +11,7 @@ export type {
   ChannelErrorKind,
   ChannelEvents,
   ChannelListener,
+  ChannelSession,
 } from './client';
 export {
   NdjsonDecoder,
@@ -38,8 +39,10 @@ export type {
   JsonRpcSuccess,
 } from './codec';
 export {
+  APPLICATION_ERROR_CODES,
   APP_TO_SERVER_METHODS,
   AUTH_FAILED_CODE,
+  applicationErrorName,
   BACKOFF_SCHEDULE_MS,
   CHANNEL_MAX_MESSAGE_BYTES,
   MISSED_PINGS_BEFORE_DEAD,
@@ -52,6 +55,7 @@ export {
 } from './protocol';
 export type {
   AppShutdownParams,
+  ApplicationErrorName,
   ChannelFailure,
   ChannelIdentity,
   ClientInfo,

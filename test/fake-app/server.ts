@@ -730,6 +730,7 @@ export class FakeApp {
             call_id: connection.callId,
             handoff_id: handoffId,
             outcome: this.resolve(connection, action.outcome),
+            ...(action.image === undefined ? {} : { image: action.image }),
           }),
         );
         break;

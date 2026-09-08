@@ -110,6 +110,31 @@ function numberKeyword(tool: ToolName, field: string, name: string): number {
   return value;
 }
 
+/**
+ * The same, one level down: `verify.detail` is declared inside its parent object, so the
+ * bound the server enforces is still read out of the registered schema rather than written
+ * here a second time.
+ */
+function nestedNumberKeyword(tool: ToolName, field: string, child: string, name: string): number {
+  const parent = properties(tool)[field];
+  const nested =
+    typeof parent === 'object' && parent !== null
+      ? (parent as { properties?: unknown }).properties
+      : undefined;
+  const schema =
+    typeof nested === 'object' && nested !== null
+      ? (nested as Record<string, unknown>)[child]
+      : undefined;
+  const value =
+    typeof schema === 'object' && schema !== null
+      ? (schema as Record<string, unknown>)[name]
+      : undefined;
+  if (typeof value !== 'number') {
+    throw new Error(`the registered input schema of ${tool} declares no ${field}.${child}.${name}`);
+  }
+  return value;
+}
+
 function patternKeyword(tool: ToolName, field: string): RegExp {
   const value = keyword(tool, field, 'pattern');
   if (typeof value !== 'string') {
@@ -289,6 +314,87 @@ export function inferShape(input: unknown): ShapeInference {
   if (kind === 'open') return openShape(input);
   if (kind === 'continue') return continueShape(input);
   return resumeShape(input);
+}
+
+// ---------------------------------------------------------------- handoff_verify input
+
+/** §4.7.2: the verification report, once it is known to be well formed. */
+export interface VerifyInput {
+  readonly handoffId: string;
+  readonly ok: boolean | null;
+  readonly detail: string;
+}
+
+export type VerifyParse =
+  | { readonly ok: true; readonly input: VerifyInput }
+  | { readonly ok: false; readonly problem: string };
+
+/** §4.7.2: `verify.detail` is 1 to 4000 characters, as the registered schema declares it. */
+export const DETAIL_MIN_LENGTH: number = nestedNumberKeyword(
+  'handoff_verify',
+  'verify',
+  'detail',
+  'minLength',
+);
+export const DETAIL_MAX_LENGTH: number = nestedNumberKeyword(
+  'handoff_verify',
+  'verify',
+  'detail',
+  'maxLength',
+);
+
+/**
+ * `handoff_verify` has one shape, so arguments that do not fit its registered schema are a
+ * protocol violation rather than one of the catalogue's errors, exactly as for
+ * `handoff_runbooks`: the caller turns this message into the MCP `Invalid params` that layer
+ * is for. `NO_VERIFY_IN_SPEC` and `HANDOFF_NOT_FOUND` are answers about a handoff and stay
+ * in the catalogue; a `verify` that is not an object is not about a handoff at all.
+ *
+ * The message names fields and limits, never a value: a `detail` can quote what the agent
+ * observed, and that is not something to echo into an error (R-19).
+ */
+export function parseVerifyInput(input: unknown): VerifyParse {
+  if (!isRecord(input)) return { ok: false, problem: 'the arguments are not a JSON object' };
+
+  const unknownFields = Object.keys(input)
+    .filter((name) => name !== 'handoff_id' && name !== 'verify')
+    .sort();
+  if (unknownFields.length > 0) {
+    return { ok: false, problem: `handoff_verify has no field ${list(unknownFields)}` };
+  }
+
+  const handoffId = input['handoff_id'];
+  if (!isHandoffId(handoffId)) {
+    return { ok: false, problem: 'handoff_id is not a handoff id' };
+  }
+
+  const verify = input['verify'];
+  if (!isRecord(verify)) return { ok: false, problem: 'verify is not an object' };
+  const strayVerifyFields = Object.keys(verify)
+    .filter((name) => name !== 'ok' && name !== 'detail')
+    .sort();
+  if (strayVerifyFields.length > 0) {
+    return { ok: false, problem: `verify has no field ${list(strayVerifyFields)}` };
+  }
+
+  const ok = verify['ok'];
+  if (typeof ok !== 'boolean' && ok !== null) {
+    return { ok: false, problem: 'verify.ok is not true, false or null' };
+  }
+
+  const detail = verify['detail'];
+  if (
+    typeof detail !== 'string' ||
+    detail.length < DETAIL_MIN_LENGTH ||
+    detail.length > DETAIL_MAX_LENGTH
+  ) {
+    return {
+      ok: false,
+      problem: `verify.detail must be a string of ${String(DETAIL_MIN_LENGTH)} to ${String(DETAIL_MAX_LENGTH)} characters`,
+    };
+  }
+
+  return { ok: true, input: { handoffId, ok, detail } };
 }
 
 // -------------------------------------------------------------- handoff_runbooks input

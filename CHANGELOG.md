@@ -103,6 +103,43 @@ schema version, which is independent of the package version.
   fake with the channel client for registration, a refused token, a version mismatch, a
   ping in each direction, `app.shutdown` and a dropped connection, and requires the golden
   comparison to fail on a planted mutation.
+- **Blocking calls.** `handoff_to_user` now opens, continues and resumes a handoff against
+  the overlay app and blocks until the user is done. `src/calls/` holds the in-flight table
+  — one entry per waiting call, at most one waiting call per handoff — and everything that
+  ends a wait: the outcome the app pushes, the heartbeat deadline (the app is told the call
+  detached and the agent gets `in_progress` with the instruction to resume at once), the
+  agent cancelling (the app is told, the call is forgotten), and a channel that dropped, in
+  which case the call is **kept** and re-issues its resume when the connection returns, so a
+  restart of the app costs a banner and not a handoff.
+- A resume reads the snapshot of the design: a handoff that is already final hands its
+  outcome back with `already_delivered`, a queued undelivered event comes back at once, and
+  anything else attaches the call and waits. `handoff_verify` forwards the report and returns
+  the outcome the app answers with.
+- The five application errors of the channel become the published error catalogue:
+  `not_waiting`, `final` and `not_found` become `HANDOFF_NOT_WAITING`, `HANDOFF_FINAL` and
+  `HANDOFF_NOT_FOUND`, `no_verify_in_spec` becomes `NO_VERIFY_IN_SPEC`, and
+  `unknown_value_key` becomes the `SPEC_INVALID` of the value-key rule, one problem per key
+  the app refused. A channel that is refusing rather than absent — a token the app rejects, a
+  protocol version it does not speak — still degrades an open to text mode, now with the
+  repair sentence for that failure beside it.
+- A screenshot the user sent as an image travels beside its outcome on the channel and is
+  attached to the tool result as an image block, when the session's capability row says the
+  client can show one. The channel schema gains an optional `image` for it, on `handoff.event`
+  and on the snapshot of `handoff.resume`; the published outcome schema is unchanged.
+- `test/integration/`: the flows of the design driven end to end — a real MCP client, the
+  real server, the real channel client over a real named pipe or Unix socket, and the fake
+  app replaying the golden sequence — with both halves of the traffic compared against the
+  fixture afterwards. Plus the degraded half: no app at all, a runbook that answers before
+  the channel is used, a socket that dies mid-call, a refused token, a version mismatch, a
+  cancelled call, each application error, and the image gating.
+
+### Fixed
+
+- `serve` did not return when the agent closed stdin. The MCP SDK's stdio transport watches
+  stdin for data and for errors but never for its end, so nothing noticed the agent exiting;
+  while the server had no channel the process simply ran out of work and exited anyway, and
+  that stopped being true as soon as a socket and a retry timer were holding it open. `serve`
+  now watches stdin itself, which is also what triggers the goodbye on the channel.
 
 ## [0.1.0] - 2026-09-07
 

@@ -27,7 +27,16 @@ import type { AnySchema, ErrorObject, ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
 import { describe, expect, it } from 'vitest';
 
-import { ChannelClient, PROTOCOL_VERSION, encodeMessage, success } from '../../src/channel';
+import {
+  APPLICATION_ERROR_CODES,
+  AUTH_FAILED_CODE,
+  ChannelClient,
+  PROTOCOL_UNSUPPORTED_CODE,
+  PROTOCOL_VERSION,
+  applicationErrorName,
+  encodeMessage,
+  success,
+} from '../../src/channel';
 import { createLogger } from '../../src/log';
 import type { Endpoint, TokenRead } from '../../src/platform';
 
@@ -465,6 +474,53 @@ describe('what the client puts on the wire', () => {
   it('speaks the version the schema pins and the protocol_version file repeats', () => {
     const defs = channelSchema['$defs'] as Record<string, JsonObject>;
     expect(PROTOCOL_VERSION).toBe(defs['protocol_version_current']?.['const']);
+  });
+
+  /**
+   * The five application errors are numbered in `protocol/channel/README.md` and nowhere
+   * else (`DEVIATIONS.md`, T-007), and the pipeline maps them to the catalogue of §4.7.5 by
+   * **code alone**. A constant that drifted from the table would silently turn one refusal
+   * into another — a `final` read as a `not_found` — so the table is parsed and compared.
+   */
+  it('numbers the application errors exactly as the README table does', () => {
+    const readme = readFileSync(join(PROTOCOL, 'README.md'), 'utf8');
+    const documented = new Map<string, number>();
+    for (const row of readme.matchAll(/^\|\s*`(-\d+)`\s*\|\s*`(\w+)`\s*\|/gmu)) {
+      documented.set(row[2] ?? '', Number(row[1]));
+    }
+    expect(documented.get('auth_failed')).toBe(AUTH_FAILED_CODE);
+    expect(documented.get('protocol_unsupported')).toBe(PROTOCOL_UNSUPPORTED_CODE);
+    for (const [name, code] of Object.entries(APPLICATION_ERROR_CODES)) {
+      expect([name, documented.get(name)]).toEqual([name, code]);
+      expect(applicationErrorName(code)).toBe(name);
+    }
+    expect(applicationErrorName(-32099)).toBeUndefined();
+  });
+
+  /**
+   * The screenshot the user sent travels **beside** the outcome, because the published
+   * outcome schema is closed and carries no pixels (§6.6, `DEVIATIONS.md`, T-020). It is
+   * optional on both messages that can carry a screenshot outcome, and it is a string.
+   */
+  it('carries an optional image beside the outcome of an event and of a resume', () => {
+    const image =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const outcome = params(fixtures.get('f02-happy-path.jsonl')?.[2]?.msg ?? {})[
+      'outcome'
+    ] as JsonObject;
+
+    const event = {
+      jsonrpc: '2.0',
+      method: 'handoff.event',
+      params: { call_id: 'call_2q7m8r1t', handoff_id: 'hf_7k3m9p2q4r', outcome },
+    };
+    accepts(event);
+    accepts({ ...event, params: { ...event.params, image } });
+    rejects({ ...event, params: { ...event.params, image: 42 } });
+    rejects({ ...event, params: { ...event.params, image: '' } });
+
+    accepts({ jsonrpc: '2.0', id: 3, result: { state: 'active', outcome, image } });
+    rejects({ jsonrpc: '2.0', id: 3, result: { state: 'active', outcome, image: null } });
   });
 
   it('sends a hello, a ping answer and a session.bye the schema accepts', async () => {

@@ -97,7 +97,7 @@ Requests carry `id`; notifications do not. `→` is server to app, `←` is app 
 | →         | `handoff.detach_call` | notification | `handoff_id, call_id, reason`                                                                                                             | —                                            |
 | →         | `hook.stop`           | request      | none                                                                                                                                      | `block, reason?`                             |
 | →         | `session.bye`         | notification | none                                                                                                                                      | —                                            |
-| ←         | `handoff.event`       | notification | `call_id, handoff_id, outcome`                                                                                                            | —                                            |
+| ←         | `handoff.event`       | notification | `call_id, handoff_id, outcome, image?`                                                                                                    | —                                            |
 | ←         | `app.shutdown`        | notification | `reason`                                                                                                                                  | —                                            |
 | ↔         | `ping`                | request      | none                                                                                                                                      | `{}`                                         |
 
@@ -111,6 +111,15 @@ depends on it, because the app queues outcomes regardless.
 Payloads reference the public schemas rather than repeating them: `spec` and
 `replacement_steps` point at `handoff-spec.v1.schema.json`, `outcome` and `secret_treated`
 at `handoff-outcome.v1.schema.json`. Register all three schemas in the same validator.
+
+`image` is the one payload that is **not** in a public schema. The published outcome is a
+closed object and carries no pixels, only `screenshot.image_attached`, so a screenshot the
+user sent as an image travels beside its outcome as base64 PNG, on the two messages that
+can carry a screenshot outcome: `handoff.event` and the snapshot of `handoff.resume` (a
+screenshot queued while no call was attached). It is absent whenever
+`screenshot.mode` is not `image`; the server attaches it as the MCP `content[1]` image
+block only when the session's `images_in_results` is true, and holds it in memory only for
+the duration of that tool result (§6.6, §4.7.4). See `DEVIATIONS.md` at the workspace root.
 
 ## Errors
 
