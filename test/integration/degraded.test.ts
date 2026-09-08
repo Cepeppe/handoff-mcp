@@ -202,12 +202,19 @@ describe('a resume of a concluded handoff (TOOL-07)', () => {
       scenario: scripted('resume-queued', 'A resume that collects an event queued meanwhile.', [
         { onResume: { state: 'active', outcome: appOutcome('question') } },
       ]),
+      // Short enough that a call left behind would announce itself before the test ends.
+      heartbeatAfterMs: 60,
     });
     await registered(active);
 
     const outcome = outcomeOf(await callTool(active, 'handoff_to_user', { resume: HANDOFF_ID }));
     expect(outcome.status).toBe('question');
     expect(outcome.already_delivered).toBe(false);
+
+    // A resume answered by its snapshot never attached: the call must not stay in the table
+    // with a live heartbeat, or the app would be told a call detached that never waited.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(active.app?.expectations()).not.toContain('handoff.detach_call');
   });
 });
 

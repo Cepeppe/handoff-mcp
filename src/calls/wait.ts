@@ -111,6 +111,7 @@ export type WaitOutcome =
 
 /** One blocking wait, as the pipeline asks for it. */
 export interface WaitRequest {
+  /** Empty for an open, which learns its handoff from the answer: `bind` names it then. */
   readonly handoff_id: string;
   readonly call_id: string;
   /** How long after now the heartbeat fires (§5.6, `heartbeatAfterMs`). */
@@ -179,14 +180,21 @@ export class InFlightCalls {
 
   /**
    * Blocks until the user is done, the heartbeat fires, the agent cancels or the handoff
-   * turns out to be gone. The app already knows this `call_id`: the `handoff.open`,
-   * `handoff.continue` or `handoff.resume` that carried it has been answered before we
-   * start waiting.
+   * turns out to be gone.
+   *
+   * **Call this before the request that tells the app about `call_id`, not after.** The app
+   * answers `handoff.open` and pushes the outcome in the same breath; a Unix socket hands
+   * both lines to the reader in one chunk, the codec yields both, and they are dispatched in
+   * one synchronous loop — so the `await` on the answer has not resumed yet when the event
+   * arrives. A table filled after that await is a table that is empty exactly when it
+   * matters, and the outcome is dropped as an event for a call nobody is waiting on. A named
+   * pipe happens to deliver the two writes separately, which is why this only ever failed on
+   * the Linux runner.
    */
   waitForOutcome(request: WaitRequest): Promise<WaitOutcome> {
     const { handoff_id, call_id, heartbeatAfterMs, signal } = request;
     const started_at = Date.now();
-    this.lastCallId.set(handoff_id, call_id);
+    if (handoff_id !== '') this.lastCallId.set(handoff_id, call_id);
 
     return new Promise<WaitOutcome>((resolve) => {
       let settled = false;
@@ -203,9 +211,35 @@ export class InFlightCalls {
         resolve(result);
       };
 
+      const entry: InFlightCall<WaitOutcome> = {
+        call_id,
+        handoff_id,
+        started_at,
+        deadline: started_at + heartbeatAfterMs,
+        resolve: settle,
+      };
+
+      /**
+       * DD-24: tell the app the call stopped waiting, so the tab can say so.
+       *
+       * The handoff id is read from the **entry**, not from the request that started the
+       * wait: an open is registered before it has one and `bind` fills it in later. While it
+       * is still empty there is nothing to detach — the app has not answered the open, so it
+       * has attached nothing — and saying so with an empty id would be a framing violation,
+       * which the app answers by closing the connection.
+       */
       const detach = (reason: DetachReason): void => {
-        this.logger.debug('call_detached', { handoff_id, call_id, reason });
-        this.channel.notify('handoff.detach_call', { handoff_id, call_id, reason });
+        if (entry.handoff_id === '') return;
+        this.logger.debug('call_detached', {
+          handoff_id: entry.handoff_id,
+          call_id,
+          reason,
+        });
+        this.channel.notify('handoff.detach_call', {
+          handoff_id: entry.handoff_id,
+          call_id,
+          reason,
+        });
       };
 
       const onAbort = (): void => {
@@ -214,17 +248,7 @@ export class InFlightCalls {
         settle({ kind: 'cancelled' });
       };
 
-      const displaced = this.table.attach({
-        call_id,
-        handoff_id,
-        started_at,
-        deadline: started_at + heartbeatAfterMs,
-        resolve: settle,
-      });
-      if (displaced !== undefined) {
-        this.logger.debug('call_displaced', { handoff_id, call_id: displaced.call_id });
-        displaced.resolve({ kind: 'transferred' });
-      }
+      this.displace(this.table.attach(entry));
 
       if (signal.aborted) {
         onAbort();
@@ -246,6 +270,35 @@ export class InFlightCalls {
         clearTimeout(timer);
       });
     });
+  }
+
+  /**
+   * Names the handoff of a call registered before it had one (an open), once the app has
+   * answered. Doing it here rather than at registration is what lets the call be in the
+   * table before the request that announces it goes out.
+   */
+  bind(callId: string, handoffId: string): void {
+    this.lastCallId.set(handoffId, callId);
+    this.displace(this.table.bind(callId, handoffId));
+  }
+
+  /**
+   * Forgets a call whose announcing request never got through — the channel was down, or the
+   * app refused it. Nothing is notified: the app either never saw the `call_id` or has
+   * already told us it will not carry it, so there is no attachment to detach.
+   */
+  release(callId: string): void {
+    this.table.detach(callId)?.resolve({ kind: 'cancelled' });
+  }
+
+  /** The call another one pushed out of its handoff's one slot (TOOL-08). */
+  private displace(call: InFlightCall<WaitOutcome> | undefined): void {
+    if (call === undefined) return;
+    this.logger.debug('call_displaced', {
+      handoff_id: call.handoff_id,
+      call_id: call.call_id,
+    });
+    call.resolve({ kind: 'transferred' });
   }
 
   /** An event names the call it belongs to; one that names none has already returned. */

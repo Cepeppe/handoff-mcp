@@ -283,21 +283,38 @@ function textMode(context: PipelineContext, spec: HandoffSpec): CallToolResult {
 }
 
 /**
- * §5.2 step 5: the call is registered in the in-flight table and blocks until §8.2 says it
- * is over. The four endings become the four results an agent can receive.
+ * §5.2 step 5, first half: the call joins the in-flight table.
+ *
+ * This happens **before** the request that tells the app about `call_id`. The app answers
+ * that request and pushes the outcome in the same breath, and both lines can reach us in one
+ * read of the socket: a call registered after the answer was awaited is registered one
+ * microtask too late, and its outcome is dropped as an event for nobody.
  */
-async function block(
+function beginCall(
   context: PipelineContext,
   handoffId: string,
   callId: string,
-): Promise<CallToolResult> {
+): Promise<WaitOutcome> {
   const { deps, calls, row, signal } = context;
-  const waited: WaitOutcome = await calls.waitForOutcome({
+  return calls.waitForOutcome({
     handoff_id: handoffId,
     call_id: callId,
     heartbeatAfterMs: deps.heartbeatAfterMs ?? heartbeatAfterMs(row, deps.config),
     signal,
   });
+}
+
+/**
+ * §5.2 step 5, second half: block until §8.2 says the call is over, and turn each of its
+ * endings into a result the agent can act on.
+ */
+async function block(
+  context: PipelineContext,
+  waiting: Promise<WaitOutcome>,
+  handoffId: string,
+): Promise<CallToolResult> {
+  const { row } = context;
+  const waited: WaitOutcome = await waiting;
 
   switch (waited.kind) {
     case 'outcome':
@@ -360,7 +377,11 @@ async function openHandoff(
 
   if (!deps.channel.isConnected()) return textMode(context, checked.spec);
 
+  // The call is registered with no handoff yet — the app names it in the answer — and named
+  // afterwards, because it has to be in the table before the request goes out.
   const callId = newCallId();
+  const waiting = beginCall(context, '', callId);
+
   let result: JsonRpcParams;
   try {
     result = await deps.channel.request('handoff.open', {
@@ -372,17 +393,20 @@ async function openHandoff(
   } catch (cause) {
     // The handoff was never created, so there is state nowhere and text mode is the whole
     // of the degradation: the agent guides the user in chat instead (FM-01, SRV-14).
+    context.calls.release(callId);
     deps.logger.error('open_failed', { call_id: callId, reason: reasonOf(cause) });
     return textMode(context, checked.spec);
   }
 
   const handoffId = result['handoff_id'];
   if (typeof handoffId !== 'string') {
+    context.calls.release(callId);
     deps.logger.error('open_without_handoff_id', { call_id: callId });
     return renderError(catalogueError('INTERNAL'));
   }
+  context.calls.bind(callId, handoffId);
   deps.logger.debug('handoff_opened', { handoff_id: handoffId, call_id: callId });
-  return block(context, handoffId, callId);
+  return block(context, waiting, handoffId);
 }
 
 /**
@@ -412,6 +436,7 @@ async function continueHandoff(
   // mint a `call_id` (§6.3, the golden sequences). A handoff this server never opened —
   // resume works from any session — has none to reuse, and a fresh one is correct there.
   const callId = context.calls.callIdFor(shape.handoffId) ?? newCallId();
+  const waiting = beginCall(context, shape.handoffId, callId);
   try {
     await deps.channel.request('handoff.continue', {
       call_id: callId,
@@ -420,12 +445,13 @@ async function continueHandoff(
       ...(steps === undefined ? {} : { replacement_steps: steps }),
     });
   } catch (cause) {
+    context.calls.release(callId);
     deps.logger.debug('continue_refused', { handoff_id: shape.handoffId, call_id: callId });
     return renderError(channelError(cause, 'handoff_id'));
   }
 
   deps.logger.debug('handoff_continued', { handoff_id: shape.handoffId, call_id: callId });
-  return block(context, shape.handoffId, callId);
+  return block(context, waiting, shape.handoffId);
 }
 
 /**
@@ -444,6 +470,7 @@ async function resumeHandoff(
   if (!deps.channel.isConnected()) return renderError(disconnected(deps, 'resume'));
 
   const callId = newCallId();
+  const waiting = beginCall(context, shape.handoffId, callId);
   let result: JsonRpcParams;
   try {
     result = await deps.channel.request('handoff.resume', {
@@ -451,6 +478,7 @@ async function resumeHandoff(
       handoff_id: shape.handoffId,
     });
   } catch (cause) {
+    context.calls.release(callId);
     deps.logger.debug('resume_refused', { handoff_id: shape.handoffId, call_id: callId });
     return renderError(channelError(cause, 'resume'));
   }
@@ -462,9 +490,10 @@ async function resumeHandoff(
     state: snapshot.state,
   });
   if (snapshot.outcome !== null) {
+    context.calls.release(callId);
     return renderChannelOutcome(context, snapshot.outcome, snapshot.image, snapshot.final);
   }
-  return block(context, shape.handoffId, callId);
+  return block(context, waiting, shape.handoffId);
 }
 
 /** `handoff_to_user` (§4.7.1, §5.2): one flat object, three shapes, one pipeline. */

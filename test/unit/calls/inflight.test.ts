@@ -81,4 +81,53 @@ describe('InFlightTable', () => {
     expect(table.detach('call_aaaaaaaa')).toBeUndefined();
     expect(table.forHandoff('hf_7k3m9p2q4r')?.call_id).toBe('call_bbbbbbbb');
   });
+
+  /**
+   * An open is registered before it has a handoff, because the outcome can arrive in the
+   * same read as the answer that names it. Until `bind` it is findable by its call id — which
+   * is what an event addresses — and by nothing else.
+   */
+  describe('a call registered before it has a handoff', () => {
+    it('is found by its call id and takes no handoff slot', () => {
+      const table = new InFlightTable<Marker>();
+      expect(table.attach(call('call_aaaaaaaa', ''))).toBeUndefined();
+
+      expect(table.get('call_aaaaaaaa')?.handoff_id).toBe('');
+      expect(table.forHandoff('')).toBeUndefined();
+      // A second unnamed call does not displace the first: they are not the same handoff.
+      expect(table.attach(call('call_bbbbbbbb', ''))).toBeUndefined();
+      expect(table.size).toBe(2);
+    });
+
+    it('takes the slot when bind names it, displacing whoever held it', () => {
+      const table = new InFlightTable<Marker>();
+      const held = call('call_aaaaaaaa', 'hf_7k3m9p2q4r');
+      table.attach(held);
+      table.attach(call('call_bbbbbbbb', ''));
+
+      expect(table.bind('call_bbbbbbbb', 'hf_7k3m9p2q4r')).toBe(held);
+      expect(table.forHandoff('hf_7k3m9p2q4r')?.call_id).toBe('call_bbbbbbbb');
+      expect(table.get('call_bbbbbbbb')?.handoff_id).toBe('hf_7k3m9p2q4r');
+      expect(table.size).toBe(1);
+    });
+
+    it('is not resurrected by a bind that arrives after it has returned', () => {
+      const table = new InFlightTable<Marker>();
+      table.attach(call('call_aaaaaaaa', ''));
+      table.detach('call_aaaaaaaa');
+
+      expect(table.bind('call_aaaaaaaa', 'hf_7k3m9p2q4r')).toBeUndefined();
+      expect(table.size).toBe(0);
+      expect(table.forHandoff('hf_7k3m9p2q4r')).toBeUndefined();
+    });
+
+    it('does not displace itself when bound twice', () => {
+      const table = new InFlightTable<Marker>();
+      table.attach(call('call_aaaaaaaa', ''));
+
+      expect(table.bind('call_aaaaaaaa', 'hf_7k3m9p2q4r')).toBeUndefined();
+      expect(table.bind('call_aaaaaaaa', 'hf_7k3m9p2q4r')).toBeUndefined();
+      expect(table.size).toBe(1);
+    });
+  });
 });

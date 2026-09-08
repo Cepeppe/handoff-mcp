@@ -15,6 +15,7 @@ import {
   HANDOFF_STATES,
   InFlightCalls,
   readSnapshot,
+  type WaitOutcome,
 } from '../../../src/calls';
 import type { ChannelEvents, ChannelListener, JsonRpcParams } from '../../../src/channel';
 import { createLogger } from '../../../src/log';
@@ -215,6 +216,83 @@ describe('waitForOutcome', () => {
 
     // Still remembered after the call returned: that is when a continue needs it.
     expect(table.callIdFor(HANDOFF)).toBe(CALL);
+  });
+});
+
+/**
+ * An open is registered before the request that announces it, so it starts without a handoff
+ * and is named when the app answers. Everything that reads the handoff id has to read it from
+ * the entry rather than from the request that started the wait — the detach notification
+ * above all, because an empty id there is a framing violation and the app answers those by
+ * closing the connection.
+ */
+describe('a call registered before its handoff exists', () => {
+  function open(table: InFlightCalls, signal = new AbortController().signal): Promise<WaitOutcome> {
+    return table.waitForOutcome({
+      handoff_id: '',
+      call_id: CALL,
+      heartbeatAfterMs: 3_000,
+      signal,
+    });
+  }
+
+  it('receives the event that names it, before anyone has bound it', async () => {
+    const channel = new StubChannel();
+    const table = calls(channel);
+    const waiting = open(table);
+
+    channel.emit('handoff.event', { call_id: CALL, handoff_id: HANDOFF, outcome });
+    await expect(waiting).resolves.toMatchObject({ kind: 'outcome' });
+  });
+
+  it('says nothing to the app when it detaches before it has a handoff', async () => {
+    const channel = new StubChannel();
+    const table = calls(channel);
+    const controller = new AbortController();
+    const waiting = open(table, controller.signal);
+
+    controller.abort();
+    await expect(waiting).resolves.toEqual({ kind: 'cancelled' });
+    // Nothing was attached, so there is nothing to detach — and `handoff_id: ""` would be
+    // refused by the channel schema.
+    expect(channel.sent).toEqual([]);
+  });
+
+  it('detaches with the handoff bind gave it, not with the empty one it started with', async () => {
+    vi.useFakeTimers();
+    try {
+      const channel = new StubChannel();
+      const table = calls(channel);
+      const waiting = open(table);
+      table.bind(CALL, HANDOFF);
+
+      vi.advanceTimersByTime(3_000);
+      expect(channel.sent).toEqual([
+        {
+          method: 'handoff.detach_call',
+          params: { handoff_id: HANDOFF, call_id: CALL, reason: 'heartbeat' },
+        },
+      ]);
+      await expect(waiting).resolves.toEqual({ kind: 'heartbeat' });
+      expect(table.callIdFor(HANDOFF)).toBe(CALL);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('is forgotten by release, with nothing said to the app', async () => {
+    const channel = new StubChannel();
+    const table = calls(channel);
+    const waiting = open(table);
+
+    table.release(CALL);
+    await expect(waiting).resolves.toEqual({ kind: 'cancelled' });
+    expect(table.waiting).toBe(0);
+    expect(channel.sent).toEqual([]);
+    // A release of a call that has already returned is a no-op, not a second answer.
+    expect(() => {
+      table.release(CALL);
+    }).not.toThrow();
   });
 });
 

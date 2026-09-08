@@ -14,6 +14,12 @@
  * therefore evicts the older one and hands it back to the caller, which resolves it with
  * `transferred_to_other_session` — the status §4.3 defines for exactly this, and the one the
  * app would itself have sent had the two calls come from different sessions (§5.7, TOOL-08).
+ *
+ * **The handoff of an open is learnt late, the call is registered early.** An open has no
+ * handoff until the app answers, but it must be in the table *before* the request goes out:
+ * the app answers and pushes the outcome in the same breath, a local socket delivers both in
+ * one read, and a table filled after the answer was awaited is still empty when the outcome
+ * lands. So a call may be registered with no handoff and `bind` names it afterwards.
  */
 
 /** What a waiting call resolves with; the shape belongs to `wait.ts`. */
@@ -21,7 +27,12 @@ export type Resolve<T> = (value: T) => void;
 
 export interface InFlightCall<T> {
   readonly call_id: string;
-  readonly handoff_id: string;
+  /**
+   * Empty until an **open** is answered: the handoff does not exist before that, and the
+   * call is nonetheless registered first (see `bind`). A continue and a resume know it from
+   * the start, because the agent named it.
+   */
+  handoff_id: string;
   /** When the call started blocking, in epoch milliseconds. */
   readonly started_at: number;
   /** When the heartbeat fires, in epoch milliseconds (§5.7, TOOL-06a). */
@@ -48,11 +59,37 @@ export class InFlightTable<T> {
    * unresolved promise. The caller owns telling it what happened.
    */
   attach(call: InFlightCall<T>): InFlightCall<T> | undefined {
-    const displaced = this.forHandoff(call.handoff_id);
-    if (displaced !== undefined) this.detach(displaced.call_id);
     this.byCall.set(call.call_id, call);
+    return this.index(call);
+  }
+
+  /**
+   * Names the handoff of a call that was registered before it had one — an open, which learns
+   * its handoff from the answer. Returns what it displaced, exactly as `attach` does.
+   *
+   * A call that has already returned is not re-indexed: the event may have arrived in the
+   * same read as the answer, which is the whole reason the call is registered first.
+   */
+  bind(callId: string, handoffId: string): InFlightCall<T> | undefined {
+    const call = this.byCall.get(callId);
+    if (call === undefined) return undefined;
+    call.handoff_id = handoffId;
+    return this.index(call);
+  }
+
+  /**
+   * Puts the call in the one slot its handoff has, and hands back the one it pushed out.
+   *
+   * A call cannot displace itself: registering the same call twice — an open bound a second
+   * time — leaves it exactly where it was and displaces nobody.
+   */
+  private index(call: InFlightCall<T>): InFlightCall<T> | undefined {
+    if (call.handoff_id === '') return undefined;
+    const held = this.forHandoff(call.handoff_id);
     this.byHandoff.set(call.handoff_id, call.call_id);
-    return displaced;
+    if (held === undefined || held.call_id === call.call_id) return undefined;
+    this.detach(held.call_id);
+    return held;
   }
 
   /** The call an event names, or nothing when it names one that has already returned. */
