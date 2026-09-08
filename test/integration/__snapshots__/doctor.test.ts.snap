@@ -1,0 +1,46 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`a healthy installation > reports every section, and exits 0 1`] = `
+"server
+  version                    0.1.0-test
+  protocol_version           1
+  capabilities_version       1
+  node                       <node>
+  platform                   <platform>
+  home                       <home>
+  log_level                  error
+
+agent
+  agent_id                   claude-code
+  display_name               Claude Code
+  resolved_from              HANDOFF_AGENT
+  support                    full
+  table_status               supported
+  images_in_results          true
+  stop_hook                  true
+  subagent_stop_hook         true
+  session_identity           parent_pid
+  user_request_delivery      clipboard_focus, stop_hook
+  cancellation_notifications true
+  tool_timeout_ms            unknown (none)
+  heartbeat_after_ms         50000
+  per_server_timeout_field   timeout
+
+token
+  path                       <home>/channel.token
+  status                     ok
+  mode                       <mode>
+
+channel
+  endpoint                   <endpoint>
+  status                     reachable
+  app_version                1.0.0
+  session_ref                <session_ref>
+
+runbooks
+  path                       <home>/runbooks
+  status                     missing
+  count                      0
+
+doctor: nothing to repair"
+`;

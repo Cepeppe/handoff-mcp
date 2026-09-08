@@ -132,6 +132,26 @@ schema version, which is independent of the package version.
   fixture afterwards. Plus the degraded half: no app at all, a runbook that answers before
   the channel is used, a socket that dies mid-call, a refused token, a version mismatch, a
   cancelled call, each application error, and the image gating.
+- `handoff-mcp hook stop`, the Stop and SubagentStop hook: it reads the hook payload on
+  stdin, asks the overlay application whether anything is still waiting for the user, and
+  prints `{"decision":"block","reason":…}` when the answer is yes. It never blocks on
+  uncertainty — a missing application, a refused token, a malformed payload, a late answer
+  and the agent's own loop guard all print nothing and exit 0 — and it holds to its budgets:
+  500 ms to connect, 1800 ms in all, and a hard exit at 1950 ms on an unref'd timer. The
+  connection is its own short-lived one over the channel codec rather than the session
+  client, whose retry schedule never gives up by design.
+- `handoff-mcp doctor`: the versions, the agent id and the capability row resolved for it,
+  the status and permissions of the channel token file, the endpoint and whether the overlay
+  application answers on it, and the runbook folder. The token itself is never printed, and
+  reaching the application is a real connection — a hello with `role: "server"` followed by
+  a goodbye — so an application that is not running (normal: every call degrades to text
+  mode) is told apart from one that refused the token or speaks another protocol version.
+  It exits 1, with a `problem:` line per finding, only for what the user has to repair.
+- CLI polish: `handoff-mcp <command> --help` prints that subcommand's own help, every
+  subcommand refuses an argument it does not know instead of ignoring it, and
+  `HANDOFF_MCP_LOG=debug` adds a record for the command that ran, for every environment
+  variable that was ignored, and for the exit code. The three exit codes are now the same
+  everywhere: 0 success, 1 the command answered no, 2 usage error.
 
 ### Fixed
 

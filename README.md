@@ -94,6 +94,58 @@ folder exists but cannot be read; a folder that is not there is simply an empty 
 that could not be parsed are named on stderr and skipped, never fatal. `HANDOFF_HOME`
 overrides `~/.handoff` for tests.
 
+## Checking an installation
+
+`handoff-mcp doctor` prints what this server resolved and what it can actually reach, which
+is the first thing to look at when something is not behaving:
+
+```console
+$ handoff-mcp doctor
+server
+  version                    0.1.0
+  protocol_version           1
+  …
+agent
+  agent_id                   claude-code
+  support                    full
+  tool_timeout_ms            1800000 (MCP_TOOL_TIMEOUT)
+  …
+token
+  path                       /home/g/.handoff/channel.token
+  status                     ok
+  mode                       0600
+channel
+  endpoint                   /home/g/.handoff/app.sock
+  status                     reachable
+  app_version                1.0.0
+  …
+doctor: nothing to repair
+```
+
+The channel line is a real connection — a hello followed by a goodbye — so it distinguishes
+an overlay that is simply not running, which is normal and degrades every call to text mode,
+from one that refused the token or speaks another protocol version, which is not. The token
+itself is never printed. It exits 0 when there is nothing to repair and 1 otherwise, with one
+`problem:` line per thing to fix at the end of the report.
+
+## The Stop hook
+
+`handoff-mcp hook stop` is the subcommand an agent runs at the end of a turn. It reads the
+hook payload on its stdin, asks the overlay application whether anything is still waiting for
+the user, and prints a decision when it is:
+
+```console
+$ echo '{"session_id":"…","hook_event_name":"Stop","stop_hook_active":false,"cwd":"."}' \
+    | handoff-mcp hook stop
+{"decision":"block","reason":"Handoff hf_7k3m9p2q4r is deferred: resume it before you stop."}
+```
+
+It never blocks on uncertainty: a missing application, a refused token, a malformed payload,
+an answer that comes too late — all of them print nothing and exit 0. It connects within
+500 ms, spends at most 1800 ms in all and hard-exits at 1950 ms, and it makes no attempt to
+retry, because the next end of turn is a fresh chance. Installing the hook is the overlay
+application's job; nothing has to be configured to run the subcommand by hand.
+
 ## Development
 
 Node 22 is the minimum supported version (`engines.node`); `.nvmrc` and `.node-version`

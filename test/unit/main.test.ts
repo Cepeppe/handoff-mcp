@@ -6,7 +6,15 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { HandoffErrorPayload } from '../../src/format';
-import { HELP_TEXT, parseArgs, run, VERSION, type CliStreams, type Command } from '../../src/main';
+import {
+  HELP_TEXT,
+  parseArgs,
+  run,
+  SUBCOMMAND_HELP,
+  VERSION,
+  type CliStreams,
+  type Command,
+} from '../../src/main';
 
 const REPO = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -28,8 +36,24 @@ function invoke(
   };
   const code = run(argv, streams);
   if (typeof code !== 'number') {
-    throw new Error(`${argv.join(' ')} did not answer with an exit code; only serve serves`);
+    throw new Error(`${argv.join(' ')} answered asynchronously; use invokeAsync`);
   }
+  return { code, out, err };
+}
+
+/** The same, for the two subcommands that talk to the app before they can answer. */
+async function invokeAsync(
+  argv: readonly string[],
+): Promise<{ code: number; out: string[]; err: string[] }> {
+  const out: string[] = [];
+  const err: string[] = [];
+  const code = await run(argv, {
+    out: (line) => out.push(line),
+    err: (line) => err.push(line),
+    readFile: (path) => {
+      throw new Error(`ENOENT: no such file or directory, open ${path}`);
+    },
+  });
   return { code, out, err };
 }
 
@@ -97,6 +121,10 @@ describe('parseArgs', () => {
     [['runbooks', 'search', '--where', 'a', '--goal'], '--goal needs a value'],
     [['runbooks', 'search', '--where', ' ', '--goal', 'b'], '--where is empty'],
     [['runbooks', 'search', '--where', 'a', '--goal', 'b', '--all'], 'unknown option: --all'],
+    [['serve', 'now'], 'serve takes no argument: now'],
+    [['hook', 'stop', 'now'], 'hook stop takes no argument: now'],
+    [['doctor', '--verbose'], 'doctor takes no argument: --verbose'],
+    [['validate', 'a.json', 'b.json'], 'validate takes one spec file: b.json'],
     [
       ['runbooks', 'search', '--where', 'a'.repeat(301), '--goal', 'b'],
       '--where is longer than 300 characters',
@@ -126,13 +154,26 @@ describe('run', () => {
     expect(err).toEqual([VERSION]);
   });
 
-  it.each<[string[], Command, string]>([
-    [['hook', 'stop'], 'hook-stop', 'T-021'],
-    [['doctor'], 'doctor', 'T-021'],
-  ])('reports %j as not implemented yet', (argv, command, task) => {
-    const { code, err } = invoke(argv);
-    expect(code).toBe(1);
-    expect(err).toEqual([`handoff-mcp: ${command} is not implemented (${task})`]);
+  it.each<[string[], Command]>([
+    [['serve', '--help'], 'serve'],
+    [['hook', '--help'], 'hook-stop'],
+    [['hook', 'stop', '-h'], 'hook-stop'],
+    [['validate', '--help'], 'validate'],
+    [['runbooks', 'search', '--help'], 'runbooks-search'],
+    [['runbooks', '--help'], 'runbooks-search'],
+    [['doctor', '--help'], 'doctor'],
+  ])('prints the help of one subcommand for %j', (argv, command) => {
+    const { code, out, err } = invoke(argv);
+    expect(code).toBe(0);
+    expect(out).toEqual([]);
+    expect(err).toEqual([SUBCOMMAND_HELP[command]]);
+  });
+
+  it('gives every subcommand a help that says what it prints and how it exits', () => {
+    for (const [command, text] of Object.entries(SUBCOMMAND_HELP)) {
+      expect(text, command).toContain('Usage:');
+      expect(text, command).toMatch(/[Ee]xit/u);
+    }
   });
 
   it('exits 2 with the help on a usage error', () => {
@@ -270,5 +311,55 @@ describe('runbooks search', () => {
     const { code, out } = search('--where', 'a', '--goal', 'b');
     expect(code).toBe(1);
     expect(payload(out.join('\n')).error.code).toBe('RUNBOOKS_UNREADABLE');
+  });
+});
+
+describe('hook stop and doctor, through the CLI', () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'handoff-cli-'));
+    process.env['HANDOFF_HOME'] = home;
+  });
+
+  afterEach(() => {
+    delete process.env['HANDOFF_HOME'];
+    delete process.env['HANDOFF_MCP_LOG'];
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('answers hook stop neutrally when there is no app, printing nothing at all', async () => {
+    const { code, out, err } = await invokeAsync(['hook', 'stop']);
+    expect(code).toBe(0);
+    expect(out).toEqual([]);
+    expect(err).toEqual([]);
+  });
+
+  it('answers doctor with the report on stdout, and 1 when the token is missing', async () => {
+    const { code, out } = await invokeAsync(['doctor']);
+    expect(code).toBe(1);
+    expect(out[0]).toBe('server');
+    expect(out.join('\n')).toContain('the channel token file is missing');
+  });
+
+  it('adds the diagnostics of HANDOFF_MCP_LOG=debug on stderr, and nothing at error', async () => {
+    const quiet = await invokeAsync(['doctor']);
+    expect(quiet.err.join('\n')).not.toContain('cli_command');
+
+    process.env['HANDOFF_MCP_LOG'] = 'debug';
+    const loud = await invokeAsync(['doctor']);
+    expect(loud.err.join('\n')).toContain('handoff-mcp debug cli_command kind=doctor');
+    expect(loud.err.join('\n')).toContain('handoff-mcp debug cli_exit code=1');
+  });
+
+  it('names an environment variable it had to ignore, at debug level', async () => {
+    process.env['HANDOFF_MCP_LOG'] = 'debug';
+    process.env['HANDOFF_TOOL_TIMEOUT_MS'] = 'half a minute';
+    try {
+      const { err } = await invokeAsync(['doctor']);
+      expect(err.join('\n')).toContain('cli_env_ignored env_var=HANDOFF_TOOL_TIMEOUT_MS');
+    } finally {
+      delete process.env['HANDOFF_TOOL_TIMEOUT_MS'];
+    }
   });
 });

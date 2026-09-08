@@ -2,31 +2,38 @@
  * CLI entry point (TECHNICAL-DESIGN §5.12).
  *
  * Routes the five subcommands of the CLI table: `serve` (the default), `hook stop`,
- * `validate <spec.json>`, `runbooks search --where … --goal …` and `doctor`. All but
- * `hook stop` and `doctor` do real work; those two answer with the task that implements
- * them.
+ * `validate <spec.json>`, `runbooks search --where … --goal …` and `doctor`.
  *
  * Output discipline (§5.12): the **result** of a subcommand goes to stdout — the JSON
- * decision of `hook stop` (§5.11, T-021), the JSON error or the summary line of `validate`,
- * the JSON result of `runbooks search` — and everything else, help, usage errors, the
- * warning about a skipped runbook and logging, goes to stderr. stdout is reserved for the
- * MCP stdio transport only while `serve` is serving.
+ * decision of `hook stop` (§5.11), the report of `doctor`, the JSON error or the summary
+ * line of `validate`, the JSON result of `runbooks search` — and everything else, help,
+ * usage errors, the warning about a skipped runbook and logging, goes to stderr. stdout is
+ * reserved for the MCP stdio transport only while `serve` is serving.
  *
- * Exit codes: 0 success · 1 the command ran and answered no (an invalid spec, a runbook
- * folder that cannot be read), or the subcommand exists but is not implemented yet ·
- * 2 usage error (unknown subcommand, unknown option, missing argument, a file that cannot
- * be read).
+ * Exit codes, the same three for every subcommand: **0** success · **1** the command ran
+ * and answered no (an invalid spec, a runbook folder that cannot be read, a `doctor` that
+ * found something to repair) · **2** usage error (unknown subcommand, unknown option,
+ * missing argument, a file that cannot be read). `hook stop` is the one subcommand with no
+ * failing exit at all: §5.11 gives it a decision or silence, and both are 0.
+ *
+ * `-h` / `--help` prints the general help; after a subcommand it prints that subcommand's
+ * own help, so `handoff-mcp doctor --help` explains `doctor` and nothing else.
+ * `HANDOFF_MCP_LOG=debug` adds a diagnostic record on stderr for the command that ran, for
+ * every environment variable that was ignored, and for the exit code.
  *
  * `serve` is the one subcommand that does not answer and return: it serves until the agent
- * closes stdin, so `run` gives back a promise for it and a number for everything else.
+ * closes stdin, so `run` gives back a promise for it. `hook stop` and `doctor` also answer
+ * asynchronously, because both talk to the app before they can say anything.
  */
 import { readFileSync } from 'node:fs';
 
 import { capabilityRowForHello, resolveCapabilityRow, toolTimeoutMs } from './adapters';
 import { ChannelClient } from './channel';
 import { readConfig } from './config';
+import { runDoctor } from './doctor';
 import { errorJson, handoffError, validateSpec, type HandoffSpec } from './format';
-import { createLogger } from './log';
+import { runHookStop } from './hook';
+import { createLogger, type Logger } from './log';
 import { serve } from './mcp';
 import { resolveProcessIdentity } from './platform';
 import { defaultRunbookRoots, RunbookStore, searchRunbooks } from './runbooks';
@@ -49,14 +56,8 @@ export const VERSION: string =
 /** Subcommands of the CLI table, in the order §5.12 lists them. */
 export type Command = 'serve' | 'hook-stop' | 'validate' | 'runbooks-search' | 'doctor';
 
-/** Subcommands that still answer with the task that will implement them. */
-type Placeholder = Exclude<Command, 'serve' | 'validate' | 'runbooks-search'>;
-
-/** The task that turns each placeholder into behaviour. */
-const IMPLEMENTED_BY: Record<Placeholder, string> = {
-  'hook-stop': 'T-021',
-  doctor: 'T-021',
-};
+/** Subcommands that take neither an argument nor an option. */
+type BareCommand = 'serve' | 'hook-stop' | 'doctor';
 
 /** The options `runbooks search` reads, with the bounds of the tool input (§4.7.3). */
 export interface RunbooksSearchArgs {
@@ -66,12 +67,11 @@ export interface RunbooksSearchArgs {
 }
 
 export type ParsedArgs =
-  | { kind: 'command'; command: 'serve' }
+  | { kind: 'command'; command: BareCommand }
   | { kind: 'command'; command: 'validate'; file: string }
   | ({ kind: 'command'; command: 'runbooks-search' } & RunbooksSearchArgs)
-  | { kind: 'command'; command: Placeholder }
   | { kind: 'version' }
-  | { kind: 'help' }
+  | { kind: 'help'; command?: Command }
   | { kind: 'usage-error'; message: string };
 
 export const HELP_TEXT = `handoff-mcp — hand a unit of work from a coding agent to the human at the machine.
@@ -88,6 +88,8 @@ Options:
   -h, --help                              Print this help and exit
   -V, --version                           Print the version and exit
 
+Run handoff-mcp <command> --help for one subcommand's own help.
+
 Environment:
   HANDOFF_AGENT                           Override the resolved agent id
   HANDOFF_TOOL_TIMEOUT_MS                 Tool timeout in milliseconds (written by the installer)
@@ -98,7 +100,82 @@ A subcommand prints its result on stdout: validate prints a summary line, or the
 error the tool returns and exits 1; runbooks search prints {"runbooks": [...]}, the same
 result the handoff_runbooks tool returns. Help, usage errors, warnings about unreadable
 runbook files and logging go to stderr; while serve is serving, stdout carries the MCP
-stdio transport and nothing else.`;
+stdio transport and nothing else.
+
+Exit codes: 0 success, 1 the command answered no, 2 usage error. hook stop always exits 0.`;
+
+/**
+ * One block per subcommand, printed by `handoff-mcp <command> --help`. Each one says what
+ * the command does, what it takes, what it prints and what its exit codes mean, because
+ * the general help has room for none of that.
+ */
+export const SUBCOMMAND_HELP: Record<Command, string> = {
+  serve: `handoff-mcp serve — serve MCP over stdio (the default when no subcommand is given).
+
+Usage:
+  handoff-mcp [serve]
+
+Registers handoff_to_user, handoff_verify and handoff_runbooks, and connects to the overlay
+application in the background. With no application listening the server still works: an open
+answers status text_mode with the spec rendered as text, and the handoff happens in the chat.
+
+stdout carries the MCP stdio transport and nothing else. Serves until the agent closes
+stdin, then says goodbye to the application and exits 0.`,
+
+  'hook-stop': `handoff-mcp hook stop — the Stop / SubagentStop hook decision.
+
+Usage:
+  handoff-mcp hook stop            (the agent writes the hook JSON on stdin)
+
+Reads the hook payload on stdin, asks the overlay application whether anything is still
+waiting for the user, and prints {"decision":"block","reason":"…"} when it is. It never
+blocks on uncertainty: a missing application, a refused token, a malformed input or a slow
+answer all print nothing. Budgets: 500 ms to connect, 1800 ms in total, 1950 ms hard exit.
+
+Always exits 0, with output only when the application asked for a block.`,
+
+  validate: `handoff-mcp validate — validate a handoff spec offline.
+
+Usage:
+  handoff-mcp validate <spec.json>
+
+Runs the same pipeline the handoff_to_user tool runs — the published schema, then the
+semantic rules — and answers with the same JSON error an agent would get, so a spec can be
+checked without an agent and without the overlay. Errors never quote the spec: they name
+paths, fields, limits and expected shapes only.
+
+Exit codes: 0 valid, with a one-line summary; 1 invalid, with the JSON error; 2 the file
+cannot be read.`,
+
+  'runbooks-search': `handoff-mcp runbooks search — search the saved runbooks offline.
+
+Usage:
+  handoff-mcp runbooks search --where <text> --goal <text> [--lang <tag>]
+
+Options:
+  --where <text>    Where the work happens, at most 300 characters
+  --goal <text>     What the handoff is for, at most 300 characters
+  --lang <tag>      BCP-47 tag selecting the stop-word list; all of them when absent
+
+Applies the matching rule of the handoff_runbooks tool to ~/.handoff/runbooks/ and prints
+the same {"runbooks": [...]} result. Files that could not be parsed are named on stderr and
+skipped.
+
+Exit codes: 0 with a possibly empty list; 1 when the folder exists but cannot be read.`,
+
+  doctor: `handoff-mcp doctor — report what this server resolved, and what it can reach.
+
+Usage:
+  handoff-mcp doctor
+
+Prints the versions, the agent id and the capability row resolved for it, the status and
+permissions of the channel token file, the endpoint and whether the overlay application
+answers on it, and the runbook folder. The token itself is never printed. Reaching the
+application is a real connection: a hello followed by a goodbye.
+
+An application that is not running is reported, not a fault: every call degrades to text
+mode. Exit codes: 0 nothing to repair; 1 something needs repairing, named in a problem line.`,
+};
 
 /** The bounds `handoff_runbooks` puts on its inputs (§4.7.3), applied to the options too. */
 const WHERE_GOAL_MAX_LENGTH = 300;
@@ -116,12 +193,31 @@ function optionName(argument: string): { name: string; inline: string | undefine
   return { name: argument.slice(0, equals), inline: argument.slice(equals + 1) };
 }
 
+/** The two spellings of "explain this and stop". */
+function isHelpFlag(argument: string | undefined): boolean {
+  return argument === '-h' || argument === '--help';
+}
+
+/**
+ * A subcommand that takes nothing: its own help, or an error naming the surplus argument.
+ * Refusing the surplus is the point — `handoff-mcp doctor --verbose` silently ignoring the
+ * option would be a worse answer than saying that there is no such option.
+ */
+function bare(rest: readonly string[], command: BareCommand, spelling: string): ParsedArgs {
+  const extra = rest[0];
+  if (extra === undefined) return { kind: 'command', command };
+  if (isHelpFlag(extra)) return { kind: 'help', command };
+  return { kind: 'usage-error', message: `${spelling} takes no argument: ${extra}` };
+}
+
 /** `runbooks search --where … --goal … [--lang …]`. */
 function parseRunbooksSearch(argv: readonly string[]): ParsedArgs {
   const values: Record<string, string> = {};
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index] ?? '';
     const { name, inline } = optionName(argument);
+    // Only in an option position: a `--goal -h` has already consumed the flag as its value.
+    if (isHelpFlag(name)) return { kind: 'help', command: 'runbooks-search' };
     if (name !== '--where' && name !== '--goal' && name !== '--lang') {
       return { kind: 'usage-error', message: `unknown option: ${name}` };
     }
@@ -159,38 +255,46 @@ function parseRunbooksSearch(argv: readonly string[]): ParsedArgs {
 }
 
 /**
- * Pure argument parsing, so the routing can be tested without running anything.
- * Options of unimplemented subcommands are accepted but not interpreted yet: the tasks
- * named in `IMPLEMENTED_BY` own their option grammar.
+ * Pure argument parsing, so the routing can be tested without running anything. Every
+ * subcommand accepts `-h` / `--help` in place of its own arguments and refuses anything
+ * else it does not know, so an option that was silently ignored can never look like an
+ * option that worked.
  */
 export function parseArgs(argv: readonly string[]): ParsedArgs {
   const first = argv[0];
 
   if (first === undefined) return { kind: 'command', command: 'serve' };
-  if (first === '-h' || first === '--help') return { kind: 'help' };
+  if (isHelpFlag(first)) return { kind: 'help' };
   if (first === '-V' || first === '--version') return { kind: 'version' };
 
   switch (first) {
     case 'serve':
-      return { kind: 'command', command: 'serve' };
+      return bare(argv.slice(1), 'serve', 'serve');
 
     case 'hook': {
       const event = argv[1];
-      if (event === 'stop') return { kind: 'command', command: 'hook-stop' };
+      if (isHelpFlag(event)) return { kind: 'help', command: 'hook-stop' };
+      if (event === 'stop') return bare(argv.slice(2), 'hook-stop', 'hook stop');
       if (event === undefined) return { kind: 'usage-error', message: 'hook needs an event: stop' };
       return { kind: 'usage-error', message: `unknown hook event: ${event}` };
     }
 
     case 'validate': {
       const file = argv[1];
+      if (isHelpFlag(file)) return { kind: 'help', command: 'validate' };
       if (file === undefined) {
         return { kind: 'usage-error', message: 'validate needs a spec file' };
+      }
+      const extra = argv[2];
+      if (extra !== undefined) {
+        return { kind: 'usage-error', message: `validate takes one spec file: ${extra}` };
       }
       return { kind: 'command', command: 'validate', file };
     }
 
     case 'runbooks': {
       const action = argv[1];
+      if (isHelpFlag(action)) return { kind: 'help', command: 'runbooks-search' };
       if (action === 'search') return parseRunbooksSearch(argv.slice(2));
       if (action === undefined) {
         return { kind: 'usage-error', message: 'runbooks needs an action: search' };
@@ -199,7 +303,7 @@ export function parseArgs(argv: readonly string[]): ParsedArgs {
     }
 
     case 'doctor':
-      return { kind: 'command', command: 'doctor' };
+      return bare(argv.slice(1), 'doctor', 'doctor');
 
     default:
       return { kind: 'usage-error', message: `unknown command: ${first}` };
@@ -370,6 +474,35 @@ async function runServe(streams: CliStreams): Promise<number> {
   }
 }
 
+/**
+ * The logger every subcommand shares: the level from `HANDOFF_MCP_LOG`, the sink the CLI's
+ * own stderr. It is built per invocation rather than once at module load, so a test that
+ * changes the environment between two `run` calls gets the level it asked for.
+ */
+function cliLogger(streams: CliStreams): Logger {
+  return createLogger(readConfig().logLevel, streams.err);
+}
+
+/** Runs the command itself. `run` wraps this with the diagnostics of `HANDOFF_MCP_LOG`. */
+function dispatch(
+  parsed: Extract<ParsedArgs, { kind: 'command' }>,
+  streams: CliStreams,
+  logger: Logger,
+): number | Promise<number> {
+  switch (parsed.command) {
+    case 'serve':
+      return runServe(streams);
+    case 'validate':
+      return runValidate(parsed.file, streams);
+    case 'runbooks-search':
+      return runRunbooksSearch(parsed, streams);
+    case 'hook-stop':
+      return runHookStop({ out: streams.out, logger });
+    case 'doctor':
+      return runDoctor({ out: streams.out, warn: streams.err, logger, version: VERSION });
+  }
+}
+
 /** Routes one invocation and returns the process exit code, or a promise for it. */
 export function run(
   argv: readonly string[],
@@ -379,7 +512,7 @@ export function run(
 
   switch (parsed.kind) {
     case 'help':
-      streams.err(HELP_TEXT);
+      streams.err(parsed.command === undefined ? HELP_TEXT : SUBCOMMAND_HELP[parsed.command]);
       return 0;
 
     case 'version':
@@ -392,13 +525,19 @@ export function run(
       return 2;
 
     case 'command': {
-      if (parsed.command === 'serve') return runServe(streams);
-      if (parsed.command === 'validate') return runValidate(parsed.file, streams);
-      if (parsed.command === 'runbooks-search') return runRunbooksSearch(parsed, streams);
-      streams.err(
-        `handoff-mcp: ${parsed.command} is not implemented (${IMPLEMENTED_BY[parsed.command]})`,
-      );
-      return 1;
+      const logger = cliLogger(streams);
+      logger.debug('cli_command', { kind: parsed.command, level: logger.level });
+      for (const name of readConfig().ignored) logger.debug('cli_env_ignored', { env_var: name });
+
+      const outcome = dispatch(parsed, streams, logger);
+      if (typeof outcome === 'number') {
+        logger.debug('cli_exit', { code: outcome });
+        return outcome;
+      }
+      return outcome.then((code) => {
+        logger.debug('cli_exit', { code });
+        return code;
+      });
     }
   }
 }
