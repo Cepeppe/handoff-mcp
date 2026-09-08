@@ -88,6 +88,21 @@ schema version, which is independent of the package version.
   sequence round-tripped through the codec and cut at each byte boundary, the schedules on
   a fake clock, the client over a real pipe or socket — and `test/contract/channel.test.ts`
   now validates what the client actually writes against the published channel schema.
+- `test/fake-app/`, the scripted channel listener the integration tests talk to: it listens
+  on the real endpoint under a `HANDOFF_HOME` of its own, validates every raw line against
+  `channel.v1.schema.json` in both directions, checks the token in constant time and the
+  protocol version for equality, assigns a `ses_…` to a server and serves a hook without
+  one, records everything received, and answers from a scenario written in a small DSL —
+  reply rules, timed emissions and barriers, consumed as a queue. The eleven scenarios in
+  `test/fake-app/scenarios/` derive their actions from `fixtures/channel/` instead of
+  copying a payload out of it, and loading one checks the summary it carries against that
+  derivation, so a fixture cannot change under a scenario unnoticed. `test/fake-app/README.md`
+  is how to write one.
+- `test/fake-app/fake-app.test.ts` replays every golden sequence over a real socket and
+  compares both halves against the fixture modulo identifiers and timestamps, drives the
+  fake with the channel client for registration, a refused token, a version mismatch, a
+  ping in each direction, `app.shutdown` and a dropped connection, and requires the golden
+  comparison to fail on a planted mutation.
 
 ## [0.1.0] - 2026-09-07
 

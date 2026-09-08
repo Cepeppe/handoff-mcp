@@ -1,0 +1,8 @@
+{
+  "scenario": "f02-happy-path",
+  "flow": "F-02",
+  "why": "Agent-opened handoff to verified: the app answers the open, pushes awaiting_verification and answers the verify.",
+  "golden": "f02-happy-path.jsonl",
+  "expect": ["handoff.open", "handoff.verify"],
+  "send": ["onOpen", "emitEvent", "onVerify"]
+}

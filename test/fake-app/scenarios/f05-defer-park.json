@@ -1,0 +1,8 @@
+{
+  "scenario": "f05-defer-park",
+  "flow": "F-05",
+  "why": "Deferred, resumed into a new call, deferred a second time and parked.",
+  "golden": "f05-defer-park.jsonl",
+  "expect": ["handoff.open", "handoff.resume"],
+  "send": ["onOpen", "emitEvent", "onResume", "emitEvent"]
+}

@@ -1,0 +1,8 @@
+{
+  "scenario": "f06-heartbeat-resume",
+  "flow": "F-06",
+  "why": "The call detaches at the heartbeat and the agent resumes into a new call, which then receives the outcome.",
+  "golden": "f06-heartbeat-resume.jsonl",
+  "expect": ["handoff.open", "handoff.detach_call", "handoff.resume"],
+  "send": ["onOpen", "awaitMessage", "onResume", "emitEvent"]
+}

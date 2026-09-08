@@ -1,0 +1,8 @@
+{
+  "scenario": "f04-ask-reply",
+  "flow": "F-04",
+  "why": "A question and then a screenshot, each pushed to the waiting call and each answered with a reply.",
+  "golden": "f04-ask-reply.jsonl",
+  "expect": ["handoff.open", "handoff.continue", "handoff.continue"],
+  "send": ["onOpen", "emitEvent", "onContinue", "emitEvent", "onContinue"]
+}

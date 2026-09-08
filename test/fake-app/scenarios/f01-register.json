@@ -1,0 +1,15 @@
+{
+  "scenario": "f01-register",
+  "flow": "F-01",
+  "why": "Session start and registration, a keep-alive ping in each direction, and the app quitting.",
+  "golden": "f01-register.jsonl",
+  "ignore": [
+    "params.identity",
+    "params.server_version",
+    "params.agent_id",
+    "params.client",
+    "params.capability_row"
+  ],
+  "expect": ["hello", "ping", "(result)"],
+  "send": ["awaitMessage", "sendPing", "awaitMessage", "sendAppShutdown"]
+}

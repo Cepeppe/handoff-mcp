@@ -1,0 +1,23 @@
+{
+  "scenario": "f11-transfer",
+  "flow": "F-11",
+  "why": "A cancelled call, a transfer to another session, a final outcome returned by resume and a late verification accepted.",
+  "golden": "f11-transfer.jsonl",
+  "expect": [
+    "handoff.open",
+    "handoff.detach_call",
+    "handoff.resume",
+    "handoff.resume",
+    "handoff.verify",
+    "session.bye"
+  ],
+  "send": [
+    "onOpen",
+    "awaitMessage",
+    "onResume",
+    "emitEvent",
+    "onResume",
+    "onVerify",
+    "awaitMessage"
+  ]
+}

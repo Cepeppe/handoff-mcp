@@ -1,0 +1,8 @@
+{
+  "scenario": "auth-failed",
+  "flow": "§6.2",
+  "why": "A hello with the wrong token: the app answers auth_failed and closes. The refusal comes from the fake’s own token check, so the scenario scripts nothing.",
+  "golden": "auth-failed.jsonl",
+  "expect": ["hello"],
+  "send": []
+}

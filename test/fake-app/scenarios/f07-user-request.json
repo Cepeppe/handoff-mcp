@@ -1,0 +1,8 @@
+{
+  "scenario": "f07-user-request",
+  "flow": "F-07",
+  "why": "A user-opened request: the handoff takes the id of the request it answers (DD-13), which is what $request_id pins.",
+  "golden": "f07-user-request.jsonl",
+  "expect": ["handoff.open"],
+  "send": ["onOpen", "emitEvent"]
+}

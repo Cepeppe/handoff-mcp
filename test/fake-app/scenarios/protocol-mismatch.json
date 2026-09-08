@@ -1,0 +1,8 @@
+{
+  "scenario": "protocol-mismatch",
+  "flow": "§6.5",
+  "why": "A hello claiming another protocol version: protocol_unsupported carrying the version the app speaks, then the connection closes.",
+  "golden": "protocol-mismatch.jsonl",
+  "expect": ["hello"],
+  "send": []
+}

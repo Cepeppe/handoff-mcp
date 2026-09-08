@@ -1,0 +1,8 @@
+{
+  "scenario": "f08-failed-correction",
+  "flow": "F-08",
+  "why": "A failed verification, replacement steps through a continue, and a second round that verifies.",
+  "golden": "f08-failed-correction.jsonl",
+  "expect": ["handoff.open", "handoff.verify", "handoff.continue", "handoff.verify"],
+  "send": ["onOpen", "emitEvent", "onVerify", "onContinue", "emitEvent", "onVerify"]
+}

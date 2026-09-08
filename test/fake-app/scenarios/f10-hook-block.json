@@ -1,0 +1,8 @@
+{
+  "scenario": "f10-hook-block",
+  "flow": "F-10",
+  "why": "A Stop hook connects, is registered without a session_ref, is told to block once and is closed.",
+  "golden": "f10-hook-block.jsonl",
+  "expect": ["hello", "hook.stop"],
+  "send": ["answerHookStop"]
+}
