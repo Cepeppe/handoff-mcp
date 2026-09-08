@@ -152,6 +152,18 @@ schema version, which is independent of the package version.
   `HANDOFF_MCP_LOG=debug` adds a record for the command that ran, for every environment
   variable that was ignored, and for the exit code. The three exit codes are now the same
   everywhere: 0 success, 1 the command answered no, 2 usage error.
+- The published documentation, in `docs/`: an overview with the three public promises and the
+  support levels, then one page each for the handoff spec, the outcome, the tool contract,
+  text mode and its limitations, the runbook format and its matching rule, the error
+  catalogue, versions and compatibility, the internal channel with its threat model quoted
+  from the requirements and its "internal, subject to change" notice, and the manual route
+  for installing the server on its own with `HANDOFF_AGENT`, `doctor` and `validate`. The
+  README is rewritten around that: what the server is, how to install it, what text mode
+  looks like, and where the rest is.
+- `pnpm check:links`, run by both legs of CI: every relative link and `#anchor` in the
+  repository's Markdown resolves, with links inside code fences and inline code left alone.
+  `test/unit/docs-links.test.ts` runs it against trees built to break it, and checks that
+  every documented page exists and is reachable from the index.
 
 ### Fixed
 

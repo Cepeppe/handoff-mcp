@@ -10,7 +10,9 @@
 
 The definition is machine-readable in `channel.v1.schema.json`; the version it defines is
 in `protocol_version`, a file containing a single integer. Golden message sequences are in
-`../../fixtures/channel/`.
+`../../fixtures/channel/`. This file is the reference for whoever writes a codec;
+[`../../docs/channel.md`](../../docs/channel.md) is the shorter page for everybody else —
+what the socket is, what protects it, and what it is allowed to carry.
 
 ## Transport and framing
 

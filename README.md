@@ -1,155 +1,130 @@
 # handoff-mcp
 
-`handoff-mcp` is an MCP server that lets a coding agent hand a unit of work over to the
-human in front of the machine: the agent describes the work as a handoff spec, the call
-blocks while the person does it, and the agent gets back a structured outcome. It is
-usable alone, in text mode: with no overlay application listening, the spec is rendered
-as text in the tool result and the handoff happens in the chat, so the server works in
-any MCP client. The public formats (spec, outcome, runbook) and the tool contract are
-MIT-licensed and versioned; the npm package is `baton-handoff-mcp`. Status: work in
-progress, nothing is stable yet.
+An MCP server that lets a coding agent hand one unit of work to the human at the machine and
+wait for the result.
 
-## Running it as an MCP server
+Some steps are not the agent's to take: creating an OAuth app, clicking through a billing
+console, granting a permission the operating system will only grant to a person. Today an
+agent stops and writes a paragraph of instructions into the chat, and everything after that —
+which step you are on, what you typed, whether it worked — lives in nobody's head but yours.
 
-`handoff-mcp` (or `handoff-mcp serve`, the same thing) speaks MCP over stdio and registers
-three tools:
+`handoff-mcp` makes that exchange a structured one. The agent writes a **handoff spec**: the
+goal, where the work happens, why a person has to do it, the values to use, the steps, and
+what the agent will verify afterwards. The call blocks. When the work is done the agent gets
+back an **outcome**: what happened, and what to do next.
 
-| Tool               | What it does                                                                                                                                                       |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `handoff_to_user`  | Opens a handoff from a spec, continues it with a reply, or re-attaches to it with `resume`. One flat input object; the server infers which of the three you meant. |
-| `handoff_verify`   | Reports the verification you performed after the user finished.                                                                                                    |
-| `handoff_runbooks` | Searches the saved runbooks before you write a spec.                                                                                                               |
+The formats are public and versioned, the server is MIT, and it works on its own in any MCP
+client. An overlay application may connect to it over a local socket to show the handoff to
+the user; this repository documents the socket, not that application.
 
-Every answer is an outcome with `status`, `final` and `instruction`: read `instruction` and
-do what it says. Mistakes come back as `{ "error": { "code", "message", "problems" } }` with
-a path and a fix per problem, never quoting the spec. `schemas/tool-contract.v1.md` is the
-contract, and it is what the descriptions the agent reads are generated from.
+**Status: work in progress. Nothing is stable yet.**
 
-With the overlay application listening, the call **blocks** while the person works and
-returns on the first thing that needs you: a question, a screenshot, a deferral, the end of
-the handoff. Two answers are not the end of it. `in_progress` is the heartbeat — it arrives
-shortly before your own tool timeout so the call ends on our terms rather than being cut off,
-and the instruction tells you to call `resume` at once. `deferred` means carry on with
-something else and resume before you conclude. A resume works from any session, and resuming
-a handoff that is already finished returns its outcome again with `already_delivered: true`,
-so retrying is always safe.
+## Install
 
-Without the overlay application listening, the server still works: an open answers
-`status: text_mode` with the spec rendered as text — every value the certain-secret patterns
-matched masked out — so the handoff happens in the chat. Nothing is logged and no verified
-state exists in that mode, so continuing, resuming and verifying answer `APP_DISCONNECTED`
-instead.
+```console
+$ npx -y baton-handoff-mcp --version
+```
 
-## Validating a spec offline
+Then register it as a stdio MCP server. In Claude Code, one entry in `~/.claude.json`:
 
-`handoff-mcp validate <spec.json>` runs the same pipeline the tool runs — the published
-schema, then the semantic rules — and answers with the same JSON error an agent would get,
-so a spec can be checked without an agent and without the overlay:
+```json
+{
+  "mcpServers": {
+    "handoff": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "baton-handoff-mcp"],
+      "env": { "HANDOFF_AGENT": "claude-code" }
+    }
+  }
+}
+```
+
+`HANDOFF_AGENT` is worth setting: it tells the server which agent it is talking to, and
+therefore how long a call may block and what the results may contain. The full route, the
+optional timeout and hook settings, and what `doctor` should print are in
+[Installing the server on its own](docs/install-without-app.md).
+
+> Until the first real release is published, the registry holds a placeholder that reserves
+> the name. Build from a checkout instead: `pnpm install && pnpm build`, then point your
+> client at `node <path>/dist/handoff-mcp.cjs`.
+
+## What it looks like with nothing else installed
+
+With nothing listening on the local socket, the server still works. It validates the spec,
+masks anything matching a certain-secret pattern, and hands the agent the spec as text to walk
+the person through in the chat:
+
+```json
+{
+  "status": "text_mode",
+  "final": false,
+  "handoff_id": null,
+  "app_reachable": false,
+  "instruction": "The overlay app is not running. Present the spec in spec_text to the user in chat, walk them through the steps one at a time, and collect the result in chat. Nothing is logged and no verified state exists in this mode: there is no handoff to resume and no verification to report.",
+  "spec_text": "…"
+}
+```
+
+```text
+# Handoff (text mode): Register the Stripe webhook for payment events
+Where: Stripe Dashboard → Developers → Webhooks  [https://dashboard.stripe.com/webhooks]
+Why a person: Requires access to the production Stripe account.
+Values (from the project):
+  - endpoint_url: https://api.myapp.example/webhooks/stripe
+  - events: checkout.session.completed, invoice.paid
+Steps:
+  1. Click Add endpoint and paste the endpoint URL.   (values: endpoint_url)
+  2. Select the events checkout.session.completed and invoice.paid.   (values: events)
+  3. Save and copy the signing secret.
+  4. Paste it into .env as STRIPE_WEBHOOK_SECRET.
+After the steps, the user copies these values into project files (never paste them in chat):
+  - STRIPE_WEBHOOK_SECRET → .env
+Verification you must perform afterwards: Check that STRIPE_WEBHOOK_SECRET exists in .env without reading its value, then send a test event from the dashboard and verify it reaches /webhooks/stripe with a valid signature.
+```
+
+That is [text mode](docs/text-mode.md), and it is a supported way to use this: a validated
+spec, one step at a time, values named and kept out of prose, secrets masked before anybody
+can paste them. What it does not have is memory — no log, no verified state, nothing to
+resume — and the instruction says so, because in that mode the instruction is all the agent
+has.
+
+Two commands do the same work offline, with no agent at all:
 
 ```console
 $ handoff-mcp validate spec.json
 spec.json: valid handoff spec (spec_version 1, 4 steps, 2 values, 1 secret, verify present)
-```
 
-It exits 0 on a valid spec, 1 with `{ "error": { "code", "message", "problems" } }` on an
-invalid one (every problem at once, each with a path and what to change), and 2 when the
-file cannot be read. Errors never quote the contents of the spec: they name paths, fields,
-limits and expected shapes only. From a checkout, `pnpm build` once and then
-`pnpm handoff-mcp validate <spec.json>`.
-
-## Searching the saved runbooks offline
-
-A runbook is a recipe saved from a handoff that worked, as a JSON file in
-`~/.handoff/runbooks/` (`%USERPROFILE%\.handoff\runbooks\` on Windows).
-`handoff-mcp runbooks search` applies the same rule the `handoff_runbooks` tool applies and
-prints the same result, so a person can see what an agent would be offered:
-
-```console
 $ handoff-mcp runbooks search --where "Stripe Dashboard > Developers > Webhooks" \
-    --goal "Set up Stripe webhook for payment notifications" --lang en
-{
-  "runbooks": [
-    {
-      "id": "rb_2b9x4d7fkq",
-      "matched_words": ["stripe", "webhook", "payment"],
-      "draft_spec": { "…": "the runbook as a spec, with [name] where the values go" },
-      "values_to_fill": { "endpoint_url": "…", "events": "…" }
-    }
-  ]
-}
+    --goal "Set up the Stripe webhook" --lang en
+{ "runbooks": [ … ] }
 ```
 
-A runbook matches when its `where` is the same place after normalisation — case, arrows and
-the other separators are ignored — **and** the two goals share at least one word beyond
-stop-words. There is no fuzzy similarity and no model: `matched_words` says exactly which
-words matched. Results are ranked by shared words, then by how recently the runbook was last
-verified, and at most five come back.
+## Documentation
 
-`--lang` is a BCP-47 tag and selects the stop-word list; without it the shipped lists are
-used together. The draft spec is deliberately not yet valid — its values are empty strings —
-so nothing can open a handoff with blanks in it: fill `values_to_fill` first.
+| Page                                                      | What is in it                                             |
+| --------------------------------------------------------- | --------------------------------------------------------- |
+| [Overview](docs/index.md)                                 | What the server is, the public promises, support levels   |
+| [The handoff spec](docs/handoff-spec.md)                  | Every field, the limits, the rules, secret handling       |
+| [The outcome](docs/outcome.md)                            | Every status and field, verification                      |
+| [The tool contract](docs/tool-contract.md)                | The three tools and the texts an agent reads              |
+| [Text mode](docs/text-mode.md)                            | The degraded path and exactly what it does not give you   |
+| [The runbook format](docs/runbook-format.md)              | Saved recipes, placeholders, the matching rule            |
+| [The error catalogue](docs/errors.md)                     | Every code, and what to do about it                       |
+| [Installing without the app](docs/install-without-app.md) | The manual route, `doctor`, `validate`, the environment   |
+| [Versions and compatibility](docs/versioning.md)          | What each version number promises                         |
+| [The internal channel](docs/channel.md)                   | The local socket, its threat model, its lack of a promise |
+| [Building the executables](docs/build-sea.md)             | The standalone per-platform build                         |
 
-It exits 0 with a possibly empty list, and 1 with a `RUNBOOKS_UNREADABLE` error when the
-folder exists but cannot be read; a folder that is not there is simply an empty list. Files
-that could not be parsed are named on stderr and skipped, never fatal. `HANDOFF_HOME`
-overrides `~/.handoff` for tests.
-
-## Checking an installation
-
-`handoff-mcp doctor` prints what this server resolved and what it can actually reach, which
-is the first thing to look at when something is not behaving:
-
-```console
-$ handoff-mcp doctor
-server
-  version                    0.1.0
-  protocol_version           1
-  …
-agent
-  agent_id                   claude-code
-  support                    full
-  tool_timeout_ms            1800000 (MCP_TOOL_TIMEOUT)
-  …
-token
-  path                       /home/g/.handoff/channel.token
-  status                     ok
-  mode                       0600
-channel
-  endpoint                   /home/g/.handoff/app.sock
-  status                     reachable
-  app_version                1.0.0
-  …
-doctor: nothing to repair
-```
-
-The channel line is a real connection — a hello followed by a goodbye — so it distinguishes
-an overlay that is simply not running, which is normal and degrades every call to text mode,
-from one that refused the token or speaks another protocol version, which is not. The token
-itself is never printed. It exits 0 when there is nothing to repair and 1 otherwise, with one
-`problem:` line per thing to fix at the end of the report.
-
-## The Stop hook
-
-`handoff-mcp hook stop` is the subcommand an agent runs at the end of a turn. It reads the
-hook payload on its stdin, asks the overlay application whether anything is still waiting for
-the user, and prints a decision when it is:
-
-```console
-$ echo '{"session_id":"…","hook_event_name":"Stop","stop_hook_active":false,"cwd":"."}' \
-    | handoff-mcp hook stop
-{"decision":"block","reason":"Handoff hf_7k3m9p2q4r is deferred: resume it before you stop."}
-```
-
-It never blocks on uncertainty: a missing application, a refused token, a malformed payload,
-an answer that comes too late — all of them print nothing and exit 0. It connects within
-500 ms, spends at most 1800 ms in all and hard-exits at 1950 ms, and it makes no attempt to
-retry, because the next end of turn is a fresh chance. Installing the hook is the overlay
-application's job; nothing has to be configured to run the subcommand by hand.
+The machine-readable contract is in [`schemas/`](schemas/): the three JSON Schemas and
+[`tool-contract.v1.md`](schemas/tool-contract.v1.md), from which the texts the server sends
+are generated. [`patterns/`](patterns/) holds the certain-secret patterns and the stop-word
+lists, [`fixtures/`](fixtures/) the examples every implementation is checked against.
 
 ## Development
 
-Node 22 is the minimum supported version (`engines.node`); `.nvmrc` and `.node-version`
-pin 24, which is what CI and development use. Install with `pnpm install`, then:
+Node 22 is the minimum supported version (`engines.node`); `.nvmrc` and `.node-version` pin
+24, which is what CI and development use. Install with `pnpm install`, then:
 
 | Script               | What it does                                                         |
 | -------------------- | -------------------------------------------------------------------- |
@@ -160,3 +135,9 @@ pin 24, which is what CI and development use. Install with `pnpm install`, then:
 | `pnpm lint`          | ESLint, type-aware                                                   |
 | `pnpm format`        | Prettier, in place (`pnpm format:check` to only check)               |
 | `pnpm typecheck`     | `tsc --noEmit`                                                       |
+| `pnpm check:links`   | Every relative link in the Markdown resolves                         |
+
+## Licence
+
+MIT — see [`LICENSE`](LICENSE). That covers the server, the schemas, the patterns, the
+channel definition and the fixtures.

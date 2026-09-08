@@ -5,6 +5,10 @@ server. They are a public promise: any agent can produce a spec against `handoff
 any client can read an outcome against `handoff-outcome.v1`, and anyone can read the runbook
 files the app writes in `~/.handoff/runbooks/` against `handoff-runbook.v1`.
 
+This file is the note next to the schemas, for whoever opens the folder. The prose
+documentation of the same formats — what to put in a spec, how to read an outcome, what the
+runbook matching rule is — is in [`../docs/`](../docs/index.md).
+
 | File                             | Who produces it                                                     | Who reads it                                         |
 | -------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------- |
 | `handoff-spec.v1.schema.json`    | The agent, as the input of `handoff_to_user`                        | The server validates it, the overlay shows it        |
