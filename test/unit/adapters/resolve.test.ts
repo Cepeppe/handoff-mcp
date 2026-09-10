@@ -1,9 +1,9 @@
 /**
  * Identity resolution over the capability table (TECHNICAL-DESIGN §5.6, DD-09).
  *
- * The real table has empty `client_names` lists (A-08: nobody has measured them yet), so
- * step 2 of the resolution cannot be exercised against it. The synthetic table below is
- * the real one with two names planted, which is exactly the shape T-023 will produce.
+ * The real table records one measured client name per shipped agent (A-08). The synthetic
+ * table below is the real one with a second name planted for Claude Code, so step 2 of the
+ * resolution is exercised with a list longer than one.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -91,12 +91,18 @@ describe('null fields fall back to the unknown row', () => {
     expect(cursor.heartbeat_after_ms).toBe(50_000);
   });
 
-  it('keeps what a planned row already measured', () => {
+  it('keeps every value the codex row measured, and inherits only the heartbeat (T-066)', () => {
     const codex = resolveCapabilityRow({ agent: 'codex' });
+    expect(codex.status).toBe('supported');
+    expect(codex.support).toBe('base');
     expect(codex.stop_hook).toBe(false);
     expect(codex.subagent_stop_hook).toBe(false);
     expect(codex.user_request_delivery).toEqual(['clipboard_focus']);
-    expect(codex.images_in_results).toBe(false);
+    expect(codex.images_in_results).toBe(true);
+    expect(codex.cancellation_notifications).toBe(false);
+    expect(codex.per_server_timeout_field).toBe('tool_timeout_sec');
+    expect(codex.tool_timeout_ms_default).toBeNull();
+    expect(codex.heartbeat_after_ms).toBe(unknown.heartbeat_after_ms);
   });
 
   it('keeps every value a supported row measured', () => {

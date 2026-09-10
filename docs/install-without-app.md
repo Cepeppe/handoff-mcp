@@ -47,6 +47,31 @@ Project scope is `.mcp.json` in the project folder, with the same object. Restar
 or reconnect the server, and `handoff_to_user`, `handoff_verify` and `handoff_runbooks`
 appear in its tool list.
 
+## Registering it in Codex
+
+Codex reads its MCP servers from `~/.codex/config.toml`, one table per server:
+
+```toml
+[mcp_servers.handoff]
+command = "npx"
+args = ["-y", "baton-handoff-mcp"]
+env = { HANDOFF_AGENT = "codex" }
+default_tools_approval_mode = "approve"
+```
+
+**`default_tools_approval_mode` is the line that is easy to miss.** Codex asks for an approval
+before every call to a tool that is not marked read-only, and `handoff_to_user` and
+`handoff_verify` are not: without the line the interactive client stops to ask on every call,
+and `codex exec` refuses the call outright ("MCP tool call requires approval, but approval
+policy is never"). `handoff_runbooks` is read-only and never asks. `codex mcp list` shows the
+entry once it is there.
+
+Codex starts its servers with a short list of environment variables of its own plus the
+entry's `env`. The two the server needs to find an overlay on Windows, `USERDOMAIN` and
+`USERNAME`, are on that list, so nothing else has to be passed. This was measured with Codex
+0.153.4 on Windows, the server started as `node <path>/dist/handoff-mcp.cjs serve`; see
+[measured agent facts](agent-facts.md#codex-cli).
+
 Any other MCP client works the same way: a stdio server, one command, no arguments. What
 changes is the name and the shape of that client's configuration file.
 
@@ -66,7 +91,7 @@ step 1 you can silently land on `unknown`, which heartbeats every 50 seconds and
 images and no hook. Everything still works — that is what `base` support means — but you get
 the cautious version of it.
 
-The value is the agent id from the table: `claude-code` today, with `codex`, `cursor`,
+The value is the agent id from the table: `claude-code` and `codex` today, with `cursor`,
 `copilot` and `opencode` reserved for their adapters. `handoff-mcp doctor` prints the row it
 resolved and whether it came from `HANDOFF_AGENT` or from the `unknown` row — it has no MCP
 handshake of its own, so it cannot show you step 2.
@@ -79,9 +104,11 @@ hit, the agent calls back with `resume`, and the loop continues for as long as t
 — but each round trip costs a turn, so raising the timeout is worth it if your client allows.
 
 - If your client supports a **per-server timeout**, raise it for this entry alone. In Claude
-  Code that is a `"timeout"` field, in milliseconds, next to `"command"`.
-- Set `HANDOFF_TOOL_TIMEOUT_MS` in the entry's `env` to the same number, so the server knows
-  what you configured and can heartbeat one minute before it rather than guessing.
+  Code that is a `"timeout"` field, in milliseconds, next to `"command"`. In Codex it is
+  `tool_timeout_sec` in the server's table, in **seconds**: `tool_timeout_sec = 1800`.
+- Set `HANDOFF_TOOL_TIMEOUT_MS` in the entry's `env` to the same duration in milliseconds, so
+  the server knows what you configured and can heartbeat one minute before it rather than
+  guessing.
 - Claude Code also reads a global `MCP_TOOL_TIMEOUT` from `~/.claude/settings.json`. It
   applies to **every** MCP server of that client, not only this one, which is why it is worth
   preferring the per-server field.
@@ -94,6 +121,15 @@ hit, the agent calls back with `resume`, and the loop continues for as long as t
   "env": { "HANDOFF_AGENT": "claude-code", "HANDOFF_TOOL_TIMEOUT_MS": "1800000" },
   "timeout": 1800000
 }
+```
+
+```toml
+[mcp_servers.handoff]
+command = "npx"
+args = ["-y", "baton-handoff-mcp"]
+env = { HANDOFF_AGENT = "codex", HANDOFF_TOOL_TIMEOUT_MS = "1800000" }
+default_tools_approval_mode = "approve"
+tool_timeout_sec = 1800
 ```
 
 The heartbeat is the configured timeout minus one minute, never less than 50 seconds.
@@ -130,12 +166,17 @@ subcommand begins.
 The hook never blocks on uncertainty: no overlay, a refused token, a malformed payload or an
 answer that comes too late all print nothing and exit 0.
 
+**Codex has no hook to register.** Its row says so, and the instruction in every outcome then
+tells the agent that nothing will remind it and that it has to keep the handoff id itself —
+which is what `base` support means. No hook declared for `codex exec` ran in any of the places
+tried against Codex 0.153.4 (see [measured agent facts](agent-facts.md#codex-cli)).
+
 ## Check it: `doctor`
 
 ```console
 $ handoff-mcp doctor
 server
-  version                    0.2.0
+  version                    1.1.0
   protocol_version           1
   capabilities_version       1
   node                       v24.18.0

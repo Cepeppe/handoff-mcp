@@ -25,15 +25,15 @@ export interface Scenario {
   facts?(run: CanaryRun): Record<string, unknown>;
 }
 
-/** The run is well formed at all: the shared first assertion of every scenario. */
+/** The run is well formed at all: the shared first assertion of every scenario, of either agent. */
 export function wellFormed(run: CanaryRun): Assertion {
   const reason = run.timedOut
     ? 'the run was killed at the harness timeout'
     : run.result === undefined
-      ? 'stream-json carried no result message'
+      ? 'the agent printed no result'
       : run.exitCode === 0
         ? ''
-        : `claude exited ${String(run.exitCode)}`;
+        : `the agent exited ${String(run.exitCode)}`;
   return {
     id: 'harness',
     what: 'the agent ran to a result',

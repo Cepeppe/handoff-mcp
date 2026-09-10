@@ -41,9 +41,10 @@ Then register it as a stdio MCP server. In Claude Code, one entry in `~/.claude.
 ```
 
 `HANDOFF_AGENT` is worth setting: it tells the server which agent it is talking to, and
-therefore how long a call may block and what the results may contain. The full route, the
-optional timeout and hook settings, and what `doctor` should print are in
-[Installing the server on its own](docs/install-without-app.md).
+therefore how long a call may block and what the results may contain. Codex takes the same
+server as a table in `~/.codex/config.toml`, with `HANDOFF_AGENT` set to `codex`. The full
+route for both, the optional timeout and hook settings, and what `doctor` should print are
+in [Installing the server on its own](docs/install-without-app.md).
 
 > Until the first real release is published, the registry holds a placeholder that reserves
 > the name. Build from a checkout instead: `pnpm install && pnpm build`, then point your

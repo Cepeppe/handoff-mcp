@@ -124,9 +124,32 @@ describe('capabilities.json', () => {
     });
   });
 
+  it('states the codex row as the T-066 canary measured it', () => {
+    // Codex 0.153.4, 2026-09-10, `test/canary/agents/codex` and `docs/agent-facts.md`: no
+    // end-of-turn hook that `codex exec` runs, images reach the model, the per-server field is
+    // `tool_timeout_sec` in seconds, a timed-out call is abandoned rather than cancelled, and
+    // the default timeout is only bounded from below (a 120 s call was not cut).
+    expect(CAPABILITY_TABLE.find((row) => row.agent_id === 'codex')).toEqual({
+      agent_id: 'codex',
+      display_name: 'Codex CLI',
+      status: 'supported',
+      support: 'base',
+      match: { env: 'codex', client_names: ['codex-mcp-client'] },
+      tool_timeout_ms_default: null,
+      per_server_timeout_field: 'tool_timeout_sec',
+      images_in_results: true,
+      stop_hook: false,
+      subagent_stop_hook: false,
+      session_identity: 'parent_pid',
+      user_request_delivery: ['clipboard_focus'],
+      cancellation_notifications: false,
+      heartbeat_after_ms: null,
+    });
+  });
+
   it('keeps every planned adapter at base support with unmeasured fields null', () => {
     const planned = CAPABILITY_TABLE.filter((row) => row.status === 'planned');
-    expect(planned.map((row) => row.agent_id)).toEqual(['codex', 'cursor', 'copilot', 'opencode']);
+    expect(planned.map((row) => row.agent_id)).toEqual(['cursor', 'copilot', 'opencode']);
     for (const row of planned) {
       expect(row.support).toBe('base');
       expect(row.tool_timeout_ms_default).toBeNull();
@@ -137,20 +160,24 @@ describe('capabilities.json', () => {
   });
 
   it('records a client name only where the canary suite measured one (A-08)', () => {
-    // `claude-code` is what Claude Code 2.1.263 sends in the `initialize` handshake,
-    // measured by `test/canary` on 2026-09-08 and written down in `docs/agent-facts.md`.
-    // No other adapter has shipped, so no other list may hold a guess.
+    // `claude-code` is what Claude Code 2.1.263 sends in the `initialize` handshake (measured
+    // on 2026-09-08) and `codex-mcp-client` what Codex 0.153.4 sends (2026-09-10), both by
+    // `test/canary` and written down in `docs/agent-facts.md`. No other adapter has shipped,
+    // so no other list may hold a guess.
+    const measured: Readonly<Record<string, readonly string[]>> = {
+      'claude-code': ['claude-code'],
+      codex: ['codex-mcp-client'],
+    };
     for (const row of CAPABILITY_TABLE) {
-      expect(row.match.client_names, row.agent_id).toEqual(
-        row.agent_id === 'claude-code' ? ['claude-code'] : [],
-      );
+      expect(row.match.client_names, row.agent_id).toEqual(measured[row.agent_id] ?? []);
     }
   });
 
-  it('keeps the measured client name resolving to its own row without HANDOFF_AGENT', () => {
+  it('keeps each measured client name resolving to its own row without HANDOFF_AGENT', () => {
     // The point of measuring it (§5.6 step 2): an npm user who wrote the MCP entry by hand
-    // gets the full row instead of `unknown`.
+    // gets the agent's row instead of `unknown`.
     expect(resolveRow({ clientName: 'claude-code' }).agent_id).toBe('claude-code');
+    expect(resolveRow({ clientName: 'codex-mcp-client' }).agent_id).toBe('codex');
   });
 
   it('keys the editor-hosted agents on the ancestor chain (ADPT-02, R-12)', () => {

@@ -121,8 +121,22 @@ export interface ToolResultBlock {
   readonly text: string;
 }
 
+/**
+ * What a scripted overlay received and sent, for the scenarios that start one (T-066). The
+ * messages are the raw JSON-RPC lines, as `test/fake-app` records them.
+ */
+export interface AppTranscript {
+  readonly received: readonly unknown[];
+  readonly sent: readonly unknown[];
+  readonly violations: readonly unknown[];
+  /** The scripted actions the run never reached. */
+  readonly remaining: number;
+}
+
 /** Everything one run produced. */
 export interface CanaryRun {
+  /** The overlay's side, when the scenario started one. */
+  readonly app?: AppTranscript;
   readonly exitCode: number | null;
   readonly durationMs: number;
   readonly timedOut: boolean;
@@ -153,7 +167,7 @@ export interface RunOptions {
 }
 
 /** Reads an NDJSON file that may not exist yet: an absent file is no records. */
-function readNdjson<T>(file: string): T[] {
+export function readNdjson<T>(file: string): T[] {
   let text: string;
   try {
     text = readFileSync(file, 'utf8');

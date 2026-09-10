@@ -9,6 +9,39 @@ schema version, which is independent of the package version.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-11
+
+Codex is the second agent in the capability table, measured against the real Codex CLI
+rather than assumed. It is supported at `base` level: it shows the images of a tool result
+and honours a per-server timeout, but `codex exec` runs no end-of-turn hook, so what keeps a
+long handoff alive is the heartbeat and the text of the instruction — and a canary now
+proves that path against the real agent. The public formats and the channel definition are
+unchanged since `0.1.0`.
+
+### Added
+
+- The `codex` row of the capability table is `supported`, with the values measured against
+  Codex 0.153.4: `clientInfo.name` `codex-mcp-client`, images in tool results, the
+  per-server timeout field `tool_timeout_sec` (in seconds), no end-of-turn hook, no MCP
+  cancellation when a call times out, and a default timeout that is only bounded from below
+  and therefore stays unset. An entry written by hand with no `HANDOFF_AGENT` now resolves
+  to the Codex row from the handshake.
+- Codex canary scenarios in `test/canary/agents/codex/`: what the server sees of a Codex
+  session, images in tool results, E2E-8 in text mode, the per-server and the default
+  timeout, and the degraded path — the heartbeat, the resume, and a deferral the agent has
+  to remember with no hook to remind it — against a scripted overlay.
+  `pnpm canary -- --agent codex` runs them alone, and every run is isolated from the user's
+  own Codex configuration (`--ignore-user-config`, apps and plugins off, `--ephemeral`).
+- A second tool in the canary probe, `image_probe`, which returns one small square of a
+  random colour for the model to name; the probe also reports whether `USERDOMAIN` and
+  `USERNAME` reached the server and which folder the agent started it in. Both exist only
+  under `HANDOFF_CANARY=1`.
+- A Codex job in `.github/workflows/canary.yml`, which runs on `OPENAI_API_KEY`, skips
+  without it, and diffs the published Codex against `test/canary/last-codex-version`.
+- Documentation: registering the server in Codex, including the approval mode it needs
+  (`docs/install-without-app.md`), the support level of each agent (`docs/index.md`), and
+  what was measured against Codex (`docs/agent-facts.md`).
+
 ### Changed
 
 - `.github/workflows/ci.yml` runs on pushes to `main`, on pull requests and on dispatch; a

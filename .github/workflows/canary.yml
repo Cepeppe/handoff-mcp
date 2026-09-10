@@ -1,12 +1,15 @@
-# Release watch: the assumption canaries and E2E-8 against the real Claude Code
+# Release watch: the assumption canaries and E2E-8 against the real agents
 # (TECHNICAL-DESIGN §11.5, TASKS.md §0.4 items 3 and 9).
 #
 # `workflow_dispatch` only, and deliberately so. There is no schedule because the canary
-# needs a credential nobody has provisioned (T-024 is deferred): until then the owner runs
-# `pnpm canary` locally after every Claude Code update and records the result in
-# `docs/agent-facts.md`. The workflow exists so that turning the secret on is one step and
-# not one afternoon, and it **skips gracefully** rather than failing when the secret is
-# absent — a red run that only means "no key" teaches nobody anything.
+# needs credentials nobody has provisioned (T-024 is deferred): until then the owner runs
+# `pnpm canary` locally after every agent update and records the result in
+# `docs/agent-facts.md`. The workflow exists so that turning a secret on is one step and
+# not one afternoon, and each agent's job **skips gracefully** rather than failing when its
+# secret is absent — a red run that only means "no key" teaches nobody anything.
+#
+# Two agents, two jobs, two credentials: Claude Code runs on `ANTHROPIC_API_KEY`, Codex
+# (T-066) on `OPENAI_API_KEY`, and each job runs only its own agent's scenarios.
 #
 # This repository runs the canaries the server can run alone. Everything that needs the
 # overlay — E2E-1..7, 9..11 — lives in `handoff-app`'s own canary workflow.
@@ -24,9 +27,13 @@ on:
         type: string
         default: macos-15
       model:
-        description: 'Model to run the canaries against'
+        description: 'Model to run the Claude Code canaries against'
         type: string
         default: sonnet
+      codex_model:
+        description: 'Model to run the Codex canaries against'
+        type: string
+        default: gpt-5.6-luna
       open_issue:
         description: 'Open an issue when a scenario fails'
         type: boolean
@@ -40,10 +47,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Which Claude Code version is current, and which runners this dispatch asked for.
+  # Which agent versions are current, and which runners this dispatch asked for.
   #
-  # There is no changelog feed (A-22), so the npm dist-tag is the signal and
-  # `test/canary/last-claude-version` is what it is compared against. A difference is
+  # There is no changelog feed (A-22), so the npm dist-tags are the signal and the two
+  # `test/canary/last-*-version` files are what they are compared against. A difference is
   # reported and never fails the job: the run that follows says whether it matters.
   #
   # The runner list is built here rather than written as a matrix, because macOS minutes
@@ -52,12 +59,14 @@ jobs:
   # receiving runners with no error at all (T-009), and changing a label must not mean
   # editing this file.
   plan:
-    name: Published version and runners
+    name: Published versions and runners
     runs-on: ubuntu-latest
     outputs:
       published: ${{ steps.version.outputs.published }}
       pinned: ${{ steps.version.outputs.pinned }}
       changed: ${{ steps.version.outputs.changed }}
+      codex_published: ${{ steps.codex.outputs.published }}
+      codex_pinned: ${{ steps.codex.outputs.pinned }}
       runners: ${{ steps.runners.outputs.list }}
     steps:
       - uses: actions/checkout@v4
@@ -77,6 +86,19 @@ jobs:
             echo "Claude Code moved from \`$pinned\` to \`$published\`." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - id: codex
+        shell: bash
+        run: |
+          published="$(npm view @openai/codex dist-tags.latest)"
+          pinned="$(tr -d '[:space:]' < test/canary/last-codex-version)"
+          echo "published=$published" >> "$GITHUB_OUTPUT"
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          if [ "$published" = "$pinned" ]; then
+            echo "Codex is still \`$pinned\`." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Codex moved from \`$pinned\` to \`$published\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - id: runners
         shell: bash
         env:
@@ -92,7 +114,7 @@ jobs:
           echo "Runners: $list" >> "$GITHUB_STEP_SUMMARY"
 
   canary:
-    name: ${{ matrix.os }}
+    name: Claude Code · ${{ matrix.os }}
     needs: plan
     strategy:
       fail-fast: false
@@ -141,7 +163,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           HANDOFF_CANARY_MODEL: ${{ inputs.model }}
-        run: pnpm canary
+        run: pnpm canary -- --agent claude-code
 
       - name: Report
         if: always() && steps.secret.outputs.present == 'true'
@@ -152,16 +174,87 @@ jobs:
         if: always() && steps.secret.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: canary-${{ matrix.os }}
+          name: canary-claude-code-${{ matrix.os }}
           path: test/canary/results/last-run.json
           if-no-files-found: ignore
 
-  # The point of a release watch is to be told. The issue names the version and the failing
+  # The same shape for Codex (T-066). `codex login --with-api-key` reads the key from stdin,
+  # so it is never on a command line; the harness itself adds the isolation flags
+  # (`--ignore-user-config`, apps and plugins off) to every `codex exec` it starts.
+  codex:
+    name: Codex · ${{ matrix.os }}
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.plan.outputs.runners) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - id: secret
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "OPENAI_API_KEY is not configured: the Codex canaries were skipped (T-066)." \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.secret.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - if: steps.secret.outputs.present == 'true'
+        run: pnpm build
+
+      - name: Install the published Codex
+        if: steps.secret.outputs.present == 'true'
+        run: npm install --global @openai/codex@${{ needs.plan.outputs.codex_published }}
+
+      - name: Log Codex in with the API key
+        if: steps.secret.outputs.present == 'true'
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: printenv OPENAI_API_KEY | codex login --with-api-key
+
+      - name: Run the Codex canaries
+        if: steps.secret.outputs.present == 'true'
+        shell: bash
+        env:
+          HANDOFF_CANARY_CODEX_MODEL: ${{ inputs.codex_model }}
+        run: pnpm canary -- --agent codex
+
+      - name: Report
+        if: always() && steps.secret.outputs.present == 'true'
+        shell: bash
+        run: node build/canary-report.mjs >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the report
+        if: always() && steps.secret.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: canary-codex-${{ matrix.os }}
+          path: test/canary/results/last-run.json
+          if-no-files-found: ignore
+
+  # The point of a release watch is to be told. The issue names the versions and the failing
   # assertions; the transcript is not in it, because a transcript is a conversation and this
   # repository is public.
   issue:
     name: Open an issue for the failing assertions
-    needs: [plan, canary]
+    needs: [plan, canary, codex]
     if: failure() && inputs.open_issue
     runs-on: ubuntu-latest
     permissions:
@@ -181,10 +274,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PUBLISHED: ${{ needs.plan.outputs.published }}
           PINNED: ${{ needs.plan.outputs.pinned }}
+          CODEX_PUBLISHED: ${{ needs.plan.outputs.codex_published }}
+          CODEX_PINNED: ${{ needs.plan.outputs.codex_pinned }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           {
             echo "Claude Code \`$PUBLISHED\` (pinned in \`test/canary/last-claude-version\`: \`$PINNED\`)."
+            echo "Codex \`$CODEX_PUBLISHED\` (pinned in \`test/canary/last-codex-version\`: \`$CODEX_PINNED\`)."
             echo
             echo "Run: $RUN_URL"
             echo
@@ -201,5 +297,5 @@ jobs:
             fi
           } > body.md
           gh issue create \
-            --title "Canary: assumptions failing against Claude Code $PUBLISHED" \
+            --title "Canary: assumptions failing against Claude Code $PUBLISHED or Codex $CODEX_PUBLISHED" \
             --body-file body.md

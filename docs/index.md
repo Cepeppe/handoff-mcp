@@ -55,9 +55,9 @@ outcome carrying an `instruction` the agent can follow with nothing else.
 It **does not** click, type or read the screen; it makes no network connection of any kind;
 it calls no model; and it never writes a file of yours. Its only storage is what it reads:
 the runbook folder and the connection token under `~/.handoff/`. The single exception is a
-test switch nobody sets in normal use: with `HANDOFF_CANARY=1` the server registers one
-extra tool and records what it observed about the agent under `$HANDOFF_HOME/canary/`, which
-is how the facts in [measured agent facts](agent-facts.md) were obtained.
+test switch nobody sets in normal use: with `HANDOFF_CANARY=1` the server registers two
+extra tools and records what it observed about the agent under `$HANDOFF_HOME/canary/`,
+which is how the facts in [measured agent facts](agent-facts.md) were obtained.
 
 An overlay application may connect to the server over a local socket to show the handoff to
 the user; that application is a separate, closed product, and this repository documents only
@@ -73,16 +73,24 @@ travel in a tool result, whether the agent runs an end-of-turn hook. The row is 
 per session, from `HANDOFF_AGENT` if the environment sets it, otherwise from the
 `clientInfo.name` of the MCP handshake, otherwise from the `unknown` row.
 
-| Level         | What it means                                                                                                                             |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `full`        | A long, configurable tool timeout, images in tool results, and an end-of-turn hook that can remind the agent about an unfinished handoff. |
-| `base`        | Everything happens through the blocking call, the `in_progress` heartbeat and the `instruction` text. No images, no hook.                 |
-| `unsupported` | Reserved for an agent that cannot make a blocking call at all. No such row ships.                                                         |
+| Level         | What it means                                                                                                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `full`        | A long, configurable tool timeout, images in tool results, and an end-of-turn hook that can remind the agent about an unfinished handoff.                                                       |
+| `base`        | No end-of-turn hook: what keeps a long handoff alive is the blocking call, the `in_progress` heartbeat and the `instruction` text. Images travel only where the row says the client shows them. |
+| `unsupported` | Reserved for an agent that cannot make a blocking call at all. No such row ships.                                                                                                               |
 
 `base` is not a broken mode: the instruction in every outcome is written so that an agent
-which reads nothing else still behaves correctly. Today `claude-code` is `full` and the
-`unknown` row — every other MCP client — is `base`; the other agents are in the table with
-`status: planned` and enter it as their adapters ship.
+which reads nothing else still behaves correctly. The rows that ship today:
+
+| Agent (`HANDOFF_AGENT`) | Level  | Images in tool results | End-of-turn hook | Per-server timeout field       |
+| ----------------------- | ------ | ---------------------- | ---------------- | ------------------------------ |
+| `claude-code`           | `full` | yes                    | yes              | `timeout`, in milliseconds     |
+| `codex`                 | `base` | yes                    | no               | `tool_timeout_sec`, in seconds |
+| `unknown` (any other)   | `base` | no                     | no               | —                              |
+
+`cursor`, `copilot` and `opencode` are in the table with `status: planned` and enter it as
+their adapters ship. Every value of a shipped row was measured against the real agent;
+[measured agent facts](agent-facts.md) says when, and against which version.
 
 Remote agents (an agent running in the cloud rather than on your machine) find no socket and
 get [text mode](text-mode.md) with no extra code. That works, and it is not supported: there

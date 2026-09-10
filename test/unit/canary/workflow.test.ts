@@ -1,9 +1,10 @@
 /**
- * Guards `canary.yml` (T-023, TECHNICAL-DESIGN §11.5, `TASKS.md` §0.4 items 3, 7 and 9).
+ * Guards `canary.yml` (T-023, T-066, TECHNICAL-DESIGN §11.5, `TASKS.md` §0.4 items 3, 7
+ * and 9).
  *
  * The workflow is read as text, the way `test/unit/release.test.ts` reads the release
  * pipeline, because the things that can go quietly wrong in it are decisions written there
- * and nowhere else: a schedule that starts spending Claude usage unattended, a macOS leg
+ * and nowhere else: a schedule that starts spending agent usage unattended, a macOS leg
  * that starts costing ten times as much on every dispatch, a missing-secret path that goes
  * red instead of skipping, or a version check that stops comparing against the pinned file.
  *
@@ -50,6 +51,11 @@ describe('when it runs', () => {
     expect(workflow).toMatch(/if: steps\.secret\.outputs\.present == 'true'/u);
   });
 
+  it('skips the Codex job the same way when OPENAI_API_KEY is absent (T-066)', () => {
+    expect(workflow).toContain('OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}');
+    expect(workflow).toContain('the Codex canaries were skipped (T-066)');
+  });
+
   it('keeps macOS opt-in and its label an input, never a literal (§0.4 item 7, T-009)', () => {
     expect(workflow).toContain('inputs.macos_runner');
     // A literal label anywhere but the default of the input is the trap T-009 hit.
@@ -63,24 +69,44 @@ describe('when it runs', () => {
 });
 
 describe('what it checks and reports', () => {
-  it('compares the npm dist-tag against the pinned file (A-22)', () => {
+  it('compares each npm dist-tag against its pinned file (A-22)', () => {
     expect(workflow).toContain('npm view @anthropic-ai/claude-code dist-tags.latest');
     expect(workflow).toContain('test/canary/last-claude-version');
-  });
-
-  it('installs the version it just resolved, rather than latest', () => {
-    expect(workflow).toContain(
-      'npm install --global @anthropic-ai/claude-code@${{ needs.plan.outputs.published }}',
+    expect(workflow).toContain('npm view @openai/codex dist-tags.latest');
+    expect(workflow).toContain('test/canary/last-codex-version');
+    expect(readFileSync(join(ROOT, 'test', 'canary', 'last-codex-version'), 'utf8')).toMatch(
+      /^\d+\.\d+\.\d+\n$/u,
     );
   });
 
-  it('runs the canaries through the package script, over the built bundle', () => {
-    expect(packageJson.scripts['canary']).toBe('node test/canary/main.ts');
-    expect(workflow).toContain('run: pnpm build');
-    expect(workflow).toContain('run: pnpm canary');
+  it('installs the versions it just resolved, rather than latest', () => {
+    expect(workflow).toContain(
+      'npm install --global @anthropic-ai/claude-code@${{ needs.plan.outputs.published }}',
+    );
+    expect(workflow).toContain(
+      'npm install --global @openai/codex@${{ needs.plan.outputs.codex_published }}',
+    );
   });
 
-  it('opens an issue only on a failure, and asks for the permission that needs', () => {
+  it('logs Codex in from stdin, so the key is never on a command line', () => {
+    expect(workflow).toContain('printenv OPENAI_API_KEY | codex login --with-api-key');
+  });
+
+  it('runs the canaries through the package script, one agent per job, over the built bundle', () => {
+    expect(packageJson.scripts['canary']).toBe('node test/canary/main.ts');
+    expect(workflow).toContain('run: pnpm build');
+    expect(workflow).toContain('run: pnpm canary -- --agent claude-code');
+    expect(workflow).toContain('run: pnpm canary -- --agent codex');
+  });
+
+  it('keeps one report per agent and runner, so neither overwrites the other', () => {
+    expect(workflow).toContain('name: canary-claude-code-${{ matrix.os }}');
+    expect(workflow).toContain('name: canary-codex-${{ matrix.os }}');
+    expect(workflow).toContain('pattern: canary-*');
+  });
+
+  it('opens an issue only on a failure of either agent, and asks for the permission that needs', () => {
+    expect(workflow).toContain('needs: [plan, canary, codex]');
     expect(workflow).toContain('if: failure() && inputs.open_issue');
     expect(workflow).toContain('issues: write');
     expect(workflow).toContain('gh issue create');
@@ -151,6 +177,14 @@ describe('the report renderer', () => {
     expect(markdown).toContain('observed: no');
     expect(markdown).toContain('**[note] A-09**');
     expect(markdown).not.toContain('a client name arrives');
+  });
+
+  it('names the Codex model when Codex scenarios ran, and only then', () => {
+    const file = join(scratch(), 'last-run.json');
+    writeFileSync(file, JSON.stringify(report), 'utf8');
+    expect(render(file)).not.toContain('codex model');
+    writeFileSync(file, JSON.stringify({ ...report, codex_model: 'gpt-5.6-luna' }), 'utf8');
+    expect(render(file)).toContain('codex model `gpt-5.6-luna`');
   });
 
   it('carries the measured facts and no transcript at all', () => {

@@ -25,17 +25,44 @@
  * `<HANDOFF_HOME>/canary/`, and the harness of `test/canary/` points `HANDOFF_HOME` at a
  * temporary directory per run, so a probe run leaves nothing behind in `~/.handoff/`.
  *
- * The one tool it adds is `sleep_ms`, which §11.5 asks for by name: "a test tool sleeping
+ * It adds two tools. `sleep_ms` is the one §11.5 asks for by name: "a test tool sleeping
  * past the configured value is cancelled" is the only way to measure a tool timeout that
- * the agent applies to *our* server entry rather than to a stand-in.
+ * the agent applies to *our* server entry rather than to a stand-in. `image_probe` (T-066)
+ * returns one small image of a single colour drawn at random, and the model is asked to name
+ * it: whether an image block of a tool result reaches the model (A-07) is decided by the
+ * agent, and naming a colour it was never shown is a one-in-six guess.
  */
+import { randomInt } from 'node:crypto';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { deflateSync } from 'node:zlib';
 
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 
 /** The test tool of §11.5. Registered only while the probe is on. */
 export const CANARY_TOOL_NAME = 'sleep_ms';
+
+/** The image probe of A-07 (T-066). Registered only while the probe is on. */
+export const CANARY_IMAGE_TOOL_NAME = 'image_probe';
+
+/**
+ * The colours `image_probe` paints, one per call. Six far-apart ones, named the way a model
+ * names them, so that a right answer means the pixels arrived and a wrong one cannot be a
+ * matter of shade.
+ */
+export const CANARY_IMAGE_COLOURS = {
+  red: [220, 30, 30],
+  green: [30, 160, 60],
+  blue: [30, 70, 220],
+  yellow: [245, 210, 20],
+  black: [0, 0, 0],
+  white: [255, 255, 255],
+} as const satisfies Record<string, readonly [number, number, number]>;
+
+export type CanaryImageColour = keyof typeof CANARY_IMAGE_COLOURS;
+
+/** The side of the square `image_probe` returns, in pixels. */
+export const CANARY_IMAGE_SIZE_PX = 64;
 
 /** `<HANDOFF_HOME>/canary/` — the probe writes here and nowhere else. */
 export const CANARY_DIR_NAME = 'canary';
@@ -52,6 +79,11 @@ export const CANARY_OBSERVATIONS_FILE = 'observations.jsonl';
  * fails the rule the declaration list enforces. `CLAUDECODE` is the agent's own marker and
  * is here because the harness has to clear it before it may run at all — recording it
  * proves the child got a fresh one rather than ours.
+ *
+ * `USERDOMAIN` and `USERNAME` are the two Windows names the pipe is derived from (§5.8,
+ * DD-26). They are not the MCP entry's to set but the agent's to pass on, and an agent that
+ * starts its servers with a cleaned environment — Codex does (T-066) — would move the
+ * server's endpoint away from the app's without either side noticing.
  */
 export const CANARY_PROBE_ENV_NAMES: readonly string[] = [
   'HANDOFF_AGENT',
@@ -61,6 +93,8 @@ export const CANARY_PROBE_ENV_NAMES: readonly string[] = [
   'CLAUDECODE',
   'HANDOFF_PROBE',
   'HANDOFF_PROBE_TOKEN',
+  'USERDOMAIN',
+  'USERNAME',
 ];
 
 /** The longest sleep the probe will honour: past this it is a hung session, not a probe. */
@@ -97,6 +131,8 @@ export interface CanaryProbeOptions {
   readonly home: string;
   /** Injected by the tests so an observation's `at` is not the wall clock. */
   readonly now?: () => Date;
+  /** Injected by the tests so `image_probe` paints a known colour. */
+  readonly pickColour?: () => CanaryImageColour;
 }
 
 /** The input of `sleep_ms`, as narrow as the schema below. */
@@ -141,6 +177,67 @@ export function sleepUntilAborted(
   });
 }
 
+/** The eight bytes every PNG file starts with. */
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** The CRC-32 table of the PNG specification, built once. */
+const CRC_TABLE: readonly number[] = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k += 1) c = (c & 1) === 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+
+function crc32(bytes: Buffer): number {
+  let c = 0xffffffff;
+  for (const byte of bytes) c = (CRC_TABLE[(c ^ byte) & 0xff] ?? 0) ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+/** One PNG chunk: length, type, data, and the CRC of type and data. */
+function pngChunk(type: string, data: Buffer): Buffer {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length, 0);
+  const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(body), 0);
+  return Buffer.concat([length, body, crc]);
+}
+
+/**
+ * A square PNG of one colour, `size` pixels a side: truecolour, eight bits per channel, no
+ * filter. Written out by hand because it is twenty lines, and an image codec in the
+ * dependency graph of a server that never draws anything else would be the larger change.
+ */
+export function solidPng(
+  size: number,
+  [red, green, blue]: readonly [number, number, number],
+): Buffer {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(size, 0);
+  header.writeUInt32BE(size, 4);
+  header[8] = 8; // bit depth
+  header[9] = 2; // colour type 2, truecolour; compression, filter and interlace stay 0
+  const row = Buffer.alloc(1 + size * 3); // filter byte 0, then one RGB triple per pixel
+  for (let x = 0; x < size; x += 1) {
+    row[1 + x * 3] = red;
+    row[2 + x * 3] = green;
+    row[3 + x * 3] = blue;
+  }
+  const pixels = Buffer.concat(Array.from({ length: size }, () => row));
+  return Buffer.concat([
+    PNG_SIGNATURE,
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', deflateSync(pixels)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+const COLOUR_NAMES = Object.keys(CANARY_IMAGE_COLOURS) as CanaryImageColour[];
+
+function randomColour(): CanaryImageColour {
+  return COLOUR_NAMES[randomInt(COLOUR_NAMES.length)] ?? 'red';
+}
+
 /**
  * The probe, or `undefined` when `HANDOFF_CANARY` is not `1`.
  *
@@ -151,6 +248,7 @@ export function createCanaryProbe(options: CanaryProbeOptions): CanaryProbe | un
   if (!options.enabled) return undefined;
 
   const now = options.now ?? ((): Date => new Date());
+  const pickColour = options.pickColour ?? randomColour;
   const directory = join(options.home, CANARY_DIR_NAME);
   const file = join(directory, CANARY_OBSERVATIONS_FILE);
 
@@ -165,7 +263,7 @@ export function createCanaryProbe(options: CanaryProbeOptions): CanaryProbe | un
     }
   };
 
-  const tool: Tool = {
+  const sleepTool: Tool = {
     name: CANARY_TOOL_NAME,
     description:
       'Canary probe: sleeps for the given number of milliseconds and reports whether it ' +
@@ -185,12 +283,37 @@ export function createCanaryProbe(options: CanaryProbeOptions): CanaryProbe | un
     },
   };
 
+  const imageTool: Tool = {
+    name: CANARY_IMAGE_TOOL_NAME,
+    description:
+      'Canary probe: returns one small image of a single solid colour. Registered only ' +
+      'when HANDOFF_CANARY=1.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  };
+
   return {
     file,
     record,
-    tools: () => [tool],
-    handles: (name) => name === CANARY_TOOL_NAME,
+    tools: () => [sleepTool, imageTool],
+    handles: (name) => name === CANARY_TOOL_NAME || name === CANARY_IMAGE_TOOL_NAME,
     call: async (name, args, signal) => {
+      if (name === CANARY_IMAGE_TOOL_NAME) {
+        const colour = pickColour();
+        record('image_probe', { colour });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'Canary image probe: the image below is a single solid colour.',
+            },
+            {
+              type: 'image',
+              data: solidPng(CANARY_IMAGE_SIZE_PX, CANARY_IMAGE_COLOURS[colour]).toString('base64'),
+              mimeType: 'image/png',
+            },
+          ],
+        };
+      }
       if (name !== CANARY_TOOL_NAME) {
         return { isError: true, content: [{ type: 'text', text: `no canary tool ${name}` }] };
       }

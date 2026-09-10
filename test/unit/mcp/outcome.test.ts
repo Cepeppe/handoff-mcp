@@ -31,8 +31,11 @@ const ID = 'hf_7k3m9p2q4r';
 
 /** Claude Code: the Stop hook and images. */
 const withHook: ResolvedCapabilityRow = resolveCapabilityRow({ agent: 'claude-code' });
-/** Codex: neither, and the `unknown` row's defaults for what it does not state. */
-const withoutHook: ResolvedCapabilityRow = resolveCapabilityRow({ agent: 'codex' });
+/**
+ * A client we know nothing about: neither a Stop hook nor images. Codex has no hook either,
+ * but it does show images (T-066), so it cannot stand in for both absences at once.
+ */
+const withoutHook: ResolvedCapabilityRow = resolveCapabilityRow({});
 
 /** The statuses that carry no handoff id, so nothing can be substituted into them. */
 const WITHOUT_ID: readonly OutcomeStatus[] = ['runbook_match', 'text_mode'];

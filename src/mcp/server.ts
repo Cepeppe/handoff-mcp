@@ -634,16 +634,21 @@ export function createServer(deps: ServerDeps): Server {
     const info = server.getClientVersion();
     // A-01, A-02, A-08, A-23, A-24 in one line: the instant registration was possible, the
     // client the handshake named, what the server resolved from it, and which names of the
-    // MCP entry's `env` block actually arrived. Names only, never values.
+    // MCP entry's `env` block actually arrived. Names only, never values. The working
+    // directory is the one path it keeps: which folder an agent starts its servers in is the
+    // project detection of an agent that sets no CLAUDE_PROJECT_DIR (T-066).
     canary?.record('initialize', {
       client_name: info?.name ?? null,
       client_version: typeof info?.version === 'string' ? info.version : null,
       agent_id: row.agent_id,
       support: row.support,
+      stop_hook: row.stop_hook,
+      images_in_results: row.images_in_results,
       tool_timeout_ms: timeout.ms,
       timeout_source: timeout.source,
       env_present: envNamesPresent(CANARY_PROBE_ENV_NAMES),
       project_dir_is_cwd: deps.config.projectDir === process.cwd(),
+      cwd: process.cwd(),
       pid: process.pid,
       ppid: process.ppid,
       server_version: deps.version,

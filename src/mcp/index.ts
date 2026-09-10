@@ -57,13 +57,23 @@ export type {
 export {
   createCanaryProbe,
   sleepUntilAborted,
+  solidPng,
   CANARY_DIR_NAME,
+  CANARY_IMAGE_COLOURS,
+  CANARY_IMAGE_SIZE_PX,
+  CANARY_IMAGE_TOOL_NAME,
   CANARY_MAX_SLEEP_MS,
   CANARY_OBSERVATIONS_FILE,
   CANARY_PROBE_ENV_NAMES,
   CANARY_TOOL_NAME,
 } from './canary';
-export type { CanaryObservation, CanaryProbe, CanaryProbeOptions, SleepOutcome } from './canary';
+export type {
+  CanaryImageColour,
+  CanaryObservation,
+  CanaryProbe,
+  CanaryProbeOptions,
+  SleepOutcome,
+} from './canary';
 export { NullChannel } from './port';
 export type { ChannelPort } from './port';
 export { createServer, serve, toolDefinitions, SERVER_NAME } from './server';

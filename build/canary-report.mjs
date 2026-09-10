@@ -32,11 +32,17 @@ const out = [];
 const say = (line = '') => out.push(line);
 
 const failed = report.scenarios.filter((scenario) => scenario.verdict !== 'passed');
-const cost = report.scenarios.reduce((total, scenario) => total + (scenario.costUsd ?? 0), 0);
+// Codex reports tokens, not a price: a total over scenarios that reported none would be a
+// confident $0.0000, so the cost is printed only when at least one scenario had one.
+const priced = report.scenarios.filter((scenario) => typeof scenario.costUsd === 'number');
+const cost = priced.reduce((total, scenario) => total + scenario.costUsd, 0);
 
+const models =
+  `model \`${report.model}\`` +
+  (typeof report.codex_model === 'string' ? ` · codex model \`${report.codex_model}\`` : '');
 say(
   `**${report.scenarios.length - failed.length}/${report.scenarios.length} scenarios passed** ` +
-    `· ${report.platform} · model \`${report.model}\` · $${cost.toFixed(4)} · ${report.generated_at}`,
+    `· ${report.platform} · ${models} · $${cost.toFixed(4)} · ${report.generated_at}`,
 );
 say();
 say('| Scenario | Covers | Verdict | Duration |');

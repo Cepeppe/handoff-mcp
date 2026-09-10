@@ -16,31 +16,38 @@ the harness itself and is explained under [The classifier](#the-classifier).
 
 ```bash
 pnpm build          # the canary runs the real dist/handoff-mcp.cjs, not the sources
-pnpm canary         # every scenario
+pnpm canary         # every scenario of both agents
+pnpm canary -- --agent codex                   # one agent's scenarios
 pnpm canary -- observe a03-timeout-honoured    # only these
 pnpm canary -- --list                          # what exists, without spending anything
 ```
 
-`claude` must be on `PATH` and logged in. Each run builds a throw-away project under the
-system temporary directory with its own `HANDOFF_HOME`, so nothing touches `~/.handoff/`,
-and the report is written to `test/canary/results/last-run.json` (git-ignored).
+`claude` and `codex` must be on `PATH` and logged in for their scenarios. Each run builds a
+throw-away project under the system temporary directory with its own `HANDOFF_HOME`, so
+nothing touches `~/.handoff/`, and the report is written to
+`test/canary/results/last-run.json` (git-ignored).
 
-| Variable                | Effect                                                                                                                                        |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HANDOFF_CANARY_MODEL`  | The model to run against. Default `sonnet`, so a run stays cheap.                                                                             |
-| `HANDOFF_CANARY_KEEP=1` | Keeps each run's temporary project, for reading a failure by hand.                                                                            |
-| `HANDOFF_CANARY_SERVER` | The bundle the MCP entry runs, instead of `dist/handoff-mcp.cjs` of this checkout. A release points it at the tarball it is about to publish. |
+| Variable                     | Effect                                                                                                                                        |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HANDOFF_CANARY_MODEL`       | The Claude Code model to run against. Default `sonnet`, so a run stays cheap.                                                                 |
+| `HANDOFF_CANARY_CODEX_MODEL` | The Codex model to run against. Default `gpt-5.6-luna`, the one Codex's own list calls fast and affordable.                                   |
+| `HANDOFF_CANARY_CODEX`       | The `codex` program to start, when it is not the one on `PATH`.                                                                               |
+| `HANDOFF_CANARY_KEEP=1`      | Keeps each run's temporary project, for reading a failure by hand.                                                                            |
+| `HANDOFF_CANARY_SERVER`      | The bundle the MCP entry runs, instead of `dist/handoff-mcp.cjs` of this checkout. A release points it at the tarball it is about to publish. |
 
-Two rules of the harness are not options. **`--strict-mcp-config` is always passed**, so a
-run can never reach the MCP servers configured on the machine it runs on; and `CLAUDECODE`
-is always cleared for the child, because Claude Code refuses to run nested inside another
-Claude Code session and the harness is normally started from one.
+Two rules of the harness are not options. **A run never reaches the MCP servers configured on
+the machine it runs on**: for Claude Code `--strict-mcp-config` is always passed; for Codex,
+which has no such flag and merges a `-c mcp_servers` override with the user's own servers,
+every run is `codex exec --ephemeral --ignore-user-config` with `apps` and `plugins` turned
+off, which are how a Codex session reaches connected accounts. And `CLAUDECODE` is always
+cleared for the child, because Claude Code refuses to run nested inside another Claude Code
+session and the harness is normally started from one.
 
 The server itself takes part: with `HANDOFF_CANARY=1` in the MCP entry's `env` block it
-registers one extra tool, `sleep_ms`, and writes an observation file under
-`$HANDOFF_HOME/canary/`. Without that variable — every ordinary run, every installed
-server, every other test — neither exists. What the probe records is names and resolved
-values, never the value of an environment variable and never anything from a spec.
+registers two extra tools, `sleep_ms` and `image_probe`, and writes an observation file under
+`$HANDOFF_HOME/canary/`. Without that variable — every ordinary run, every installed server,
+every other test — none of it exists. What the probe records is names and resolved values,
+never the value of an environment variable and never anything from a spec.
 
 ## What was measured
 
@@ -143,19 +150,116 @@ therefore forbids the one call that makes the wanted call possible, and the scen
 as a model failure — for a reason that is the harness's fault rather than the agent's. The
 scenarios here say what to call and never what not to call.
 
+## Codex CLI
+
+**Codex CLI 0.153.4 · Windows 11 (win32-x64) · model `gpt-5.6-luna`, reasoning effort low ·
+2026-09-10.** All six scenarios passed on the first attempt, in about four and a half
+minutes, most of it the two bounded sleeps. Codex reports tokens rather than a price: the
+most expensive run, the degraded path, used about 88 000 input tokens (71 000 of them
+cached) and 385 output tokens.
+
+### Identity and configuration
+
+| Fact                                                   | Measured value                                                                                                |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Configuration                                          | `~/.codex/config.toml`, one `[mcp_servers.<name>]` table per server                                           |
+| Non-interactive command                                | `codex exec --json …`: one JSON event per line on stdout, the prompt as the last argument                     |
+| `clientInfo.name` in the `initialize` handshake (A-08) | `codex-mcp-client`                                                                                            |
+| `clientInfo.version`                                   | `0.153.4`, the CLI version                                                                                    |
+| `env` block of the MCP entry reaches the server (A-02) | Yes, whole: `HANDOFF_AGENT` resolved the row, and `HANDOFF_PROBE_TOKEN` arrived beside `HANDOFF_PROBE` (A-23) |
+| The rest of the server's environment                   | A whitelist of Codex's own; `USERDOMAIN` and `USERNAME` are on it, so the server finds the app's pipe         |
+| The server's working directory (A-24)                  | The folder Codex was started in (`-C`); no project-folder variable is set                                     |
+| Server processes started per session                   | One, and `initialize` precedes the first tool call (A-01)                                                     |
+| Images in tool results (A-07)                          | Reach the model: the colour of `image_probe` was named correctly in both runs                                 |
+| End-of-turn hook                                       | None that `codex exec` runs (below)                                                                           |
+
+`clientInfo.name` is in `src/adapters/capabilities.json` as
+`match.client_names: ["codex-mcp-client"]`, so an entry written by hand without
+`HANDOFF_AGENT` still resolves to the Codex row.
+
+**Every tool that is not annotated read-only needs an approval.** `codex exec` answers that
+request with a refusal — "MCP tool call requires approval, but approval policy is never" —
+and the interactive client stops to ask on every call. `handoff_runbooks` is read-only;
+`handoff_to_user` and `handoff_verify` are not. `default_tools_approval_mode = "approve"` on
+the entry lifts it, and is what [Installing the server on its
+own](install-without-app.md#registering-it-in-codex) tells a user to write.
+
+### Tool timeouts and cancellation (A-04, A-09)
+
+Measured with `sleep_ms` against a 120 s sleep. Codex does not tell the server when it gives
+up on a call, so the cut is timed from outside: from the probe's record of the call to the
+moment Codex printed its end.
+
+| Where the timeout was written      | Configured | Call ended                                                   | After      |
+| ---------------------------------- | ---------- | ------------------------------------------------------------ | ---------- |
+| `tool_timeout_sec` of the entry    | 20 s       | cut; the agent saw "timed out awaiting tools/call after 20s" | 20 007 ms  |
+| nothing configured (bounded probe) | —          | ran to the end                                               | 120 018 ms |
+
+- **The per-server field exists, is honoured, and is in seconds** — not milliseconds as in
+  Claude Code. Thirty minutes is `tool_timeout_sec = 1800`.
+- **No MCP cancellation.** When the timeout cuts a call, Codex stops waiting and tells the
+  server nothing: the probe's sleep was still running when the session ended.
+  `cancellation_notifications` is `false`. Nothing depends on it — the heartbeat detaches the
+  call before any timeout (§5.7).
+- **The default timeout is only bounded from below**, at more than 120 s.
+  `tool_timeout_ms_default` stays `null`, for the reason given for Claude Code above, and the
+  server heartbeats at 50 s, well inside the bound.
+
+### The end-of-turn hook
+
+Codex 0.153.4 has a hooks feature: the binary knows `SessionStart`, `UserPromptSubmit`,
+`Stop` and `SubagentStop`, and the interactive client reviews new hooks before trusting them.
+But no hook declared for a `codex exec` session ran — not from the project's
+`.codex/hooks.json` with the project marked trusted and made a git repository, not from
+`-c hooks=…`, not with the user configuration loaded, and not with
+`--dangerously-bypass-hook-trust`; not even `SessionStart`. A hook the interactive client
+might run after its review cannot be measured by a probe that has to terminate, and only
+measured behaviour may be relied on (PRIN-11). So `stop_hook` is `false`, the level is
+`base`, and the instruction in a `deferred` or `parked` outcome tells a Codex agent that
+nothing will remind it.
+
+### The degraded path (FM-03, FM-04)
+
+This is the reason Codex is the second agent: with no hook, the heartbeat and the text of the
+instruction are all that keep a long handoff alive. Measured against the real Codex with
+`test/fake-app` listening and no timeout configured:
+
+1. The first `handoff_to_user` call was answered `in_progress` after **50 022 ms** — the 50 s
+   heartbeat of a row with no known timeout — and the overlay received `handoff.detach_call`
+   with reason `heartbeat`.
+2. Codex resumed, as that instruction says. The overlay reported that the user had deferred
+   the step, and the instruction Codex received was the no-hook variant: "Nothing will remind
+   you: keep <id> in your notes for this turn".
+3. Codex resumed again before finishing, by itself, and received the final
+   `confirmed_by_user`.
+
+Three results, two resumes, and no channel line refused by the schema in either direction.
+
+### Text mode (E2E-8)
+
+With no overlay listening, `handoff_to_user` answered `status: "text_mode"` with the spec
+rendered as the block of §5.9, and Codex presented the steps in its reply. One turn.
+
 ## The scenarios
 
-| Scenario                 | Covers                                         | What it does                                                       |
-| ------------------------ | ---------------------------------------------- | ------------------------------------------------------------------ |
-| `observe`                | A-01, A-02, A-05, A-06, A-08, A-11, A-23, A-24 | One `handoff_runbooks` call with the recording Stop hook installed |
-| `e2e-08-text-mode`       | E2E-8                                          | One `handoff_to_user` call with no overlay listening               |
-| `a03-timeout-honoured`   | A-03, A-09                                     | `sleep_ms` past `MCP_TOOL_TIMEOUT`                                 |
-| `a04-per-server-timeout` | A-04, A-09                                     | `sleep_ms` past the per-server `timeout` field                     |
-| `a03-timeout-default`    | A-03                                           | `sleep_ms` for 70 s with nothing configured                        |
+| Scenario                   | Covers                                         | What it does                                                       |
+| -------------------------- | ---------------------------------------------- | ------------------------------------------------------------------ |
+| `observe`                  | A-01, A-02, A-05, A-06, A-08, A-11, A-23, A-24 | One `handoff_runbooks` call with the recording Stop hook installed |
+| `e2e-08-text-mode`         | E2E-8                                          | One `handoff_to_user` call with no overlay listening               |
+| `a03-timeout-honoured`     | A-03, A-09                                     | `sleep_ms` past `MCP_TOOL_TIMEOUT`                                 |
+| `a04-per-server-timeout`   | A-04, A-09                                     | `sleep_ms` past the per-server `timeout` field                     |
+| `a03-timeout-default`      | A-03                                           | `sleep_ms` for 70 s with nothing configured                        |
+| `codex-observe`            | A-01, A-02, A-08, A-23, A-24, SRV-19           | One `handoff_runbooks` call, read from the server's side           |
+| `codex-image`              | A-07                                           | One `image_probe` call; the model names the colour                 |
+| `codex-e2e-08-text-mode`   | E2E-8                                          | One `handoff_to_user` call with no overlay listening               |
+| `codex-per-server-timeout` | A-04, A-09                                     | `sleep_ms` past `tool_timeout_sec = 20`                            |
+| `codex-degraded-path`      | FM-03, FM-04, SRV-20                           | Heartbeat, resume, deferral and resume, against `fake-app`         |
+| `codex-default-timeout`    | FM-04                                          | `sleep_ms` for 120 s with nothing configured                       |
 
-Not covered here, and why: **A-07** (images in tool results) needs a screenshot and an
-overlay; **A-10** (`/mcp reconnect`) is interactive and stays a manual check; **A-12..A-26**
-are about platforms, OCR, capture and packaging rather than about the agent.
+Not covered here, and why: **A-07** is measured for Codex through `image_probe`; the Claude
+Code scenarios do not run it, and for Claude Code it rests on E2E-3, which needs an overlay.
+**A-10** (`/mcp reconnect`) is interactive and stays a manual check; **A-12..A-26** are about
+platforms, OCR, capture and packaging rather than about the agent.
 
 ## The classifier
 
@@ -172,11 +276,12 @@ Every assertion declares what it looked at, and that decides what happens when i
 
 ## When to re-run it
 
-After every Claude Code update, and before any release that changes how the server talks to
-an agent. The workflow `.github/workflows/canary.yml` does the same thing on a
-`workflow_dispatch`, comparing the npm dist-tag of `@anthropic-ai/claude-code` against
-`test/canary/last-claude-version`; it skips gracefully when no API key is configured, which
-is the current state.
+After every Claude Code or Codex update, and before any release that changes how the server
+talks to an agent. The workflow `.github/workflows/canary.yml` does the same thing on a
+`workflow_dispatch`, comparing the npm dist-tags of `@anthropic-ai/claude-code` and
+`@openai/codex` against `test/canary/last-claude-version` and `test/canary/last-codex-version`;
+each agent's job skips gracefully when its API key is not configured, which is the current
+state.
 
-When a run's numbers differ from the table above, update this page in the same commit as
-whatever the difference forced, and bump `test/canary/last-claude-version`.
+When a run's numbers differ from the tables above, update this page in the same commit as
+whatever the difference forced, and bump the version file of that agent.
