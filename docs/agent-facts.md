@@ -16,32 +16,38 @@ the harness itself and is explained under [The classifier](#the-classifier).
 
 ```bash
 pnpm build          # the canary runs the real dist/handoff-mcp.cjs, not the sources
-pnpm canary         # every scenario of both agents
-pnpm canary -- --agent codex                   # one agent's scenarios
+pnpm canary         # every scenario of every agent
+pnpm canary -- --agent opencode                # one agent's scenarios
 pnpm canary -- observe a03-timeout-honoured    # only these
 pnpm canary -- --list                          # what exists, without spending anything
 ```
 
-`claude` and `codex` must be on `PATH` and logged in for their scenarios. Each run builds a
-throw-away project under the system temporary directory with its own `HANDOFF_HOME`, so
-nothing touches `~/.handoff/`, and the report is written to
+`claude`, `codex` and `opencode` must be on `PATH` and logged in for their scenarios. Each run
+builds a throw-away project under the system temporary directory with its own `HANDOFF_HOME`,
+so nothing touches `~/.handoff/`, and the report is written to
 `test/canary/results/last-run.json` (git-ignored).
 
-| Variable                     | Effect                                                                                                                                        |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HANDOFF_CANARY_MODEL`       | The Claude Code model to run against. Default `sonnet`, so a run stays cheap.                                                                 |
-| `HANDOFF_CANARY_CODEX_MODEL` | The Codex model to run against. Default `gpt-5.6-luna`, the one Codex's own list calls fast and affordable.                                   |
-| `HANDOFF_CANARY_CODEX`       | The `codex` program to start, when it is not the one on `PATH`.                                                                               |
-| `HANDOFF_CANARY_KEEP=1`      | Keeps each run's temporary project, for reading a failure by hand.                                                                            |
-| `HANDOFF_CANARY_SERVER`      | The bundle the MCP entry runs, instead of `dist/handoff-mcp.cjs` of this checkout. A release points it at the tarball it is about to publish. |
+| Variable                        | Effect                                                                                                                                                               |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HANDOFF_CANARY_MODEL`          | The Claude Code model to run against. Default `sonnet`, so a run stays cheap.                                                                                        |
+| `HANDOFF_CANARY_CODEX_MODEL`    | The Codex model to run against. Default `gpt-5.6-luna`, the one Codex's own list calls fast and affordable.                                                          |
+| `HANDOFF_CANARY_OPENCODE_MODEL` | The OpenCode model to run against, as `provider/model`. Default `openrouter/thinkingmachines/inkling-small:free`: free, so a run costs nothing, and it reads images. |
+| `HANDOFF_CANARY_CODEX`          | The `codex` program to start, when it is not the one on `PATH`.                                                                                                      |
+| `HANDOFF_CANARY_OPENCODE`       | The `opencode` program to start, when it is not the one on `PATH`.                                                                                                   |
+| `HANDOFF_CANARY_KEEP=1`         | Keeps each run's temporary project, for reading a failure by hand.                                                                                                   |
+| `HANDOFF_CANARY_SERVER`         | The bundle the MCP entry runs, instead of `dist/handoff-mcp.cjs` of this checkout. A release points it at the tarball it is about to publish.                        |
 
 Two rules of the harness are not options. **A run never reaches the MCP servers configured on
 the machine it runs on**: for Claude Code `--strict-mcp-config` is always passed; for Codex,
 which has no such flag and merges a `-c mcp_servers` override with the user's own servers,
 every run is `codex exec --ephemeral --ignore-user-config` with `apps` and `plugins` turned
-off, which are how a Codex session reaches connected accounts. And `CLAUDECODE` is always
-cleared for the child, because Claude Code refuses to run nested inside another Claude Code
-session and the harness is normally started from one.
+off, which are how a Codex session reaches connected accounts. OpenCode has neither flag, so
+our server is declared inline in `OPENCODE_CONFIG_CONTENT`, `XDG_CONFIG_HOME` points at an
+empty folder of the run so that the user's global configuration never loads, project
+configuration and Claude Code's files are switched off, and the session each run leaves in
+OpenCode's history is deleted afterwards. And `CLAUDECODE` is always cleared for the child,
+because Claude Code refuses to run nested inside another Claude Code session and the harness
+is normally started from one.
 
 The server itself takes part: with `HANDOFF_CANARY=1` in the MCP entry's `env` block it
 registers two extra tools, `sleep_ms` and `image_probe`, and writes an observation file under
@@ -240,24 +246,127 @@ Three results, two resumes, and no channel line refused by the schema in either 
 With no overlay listening, `handoff_to_user` answered `status: "text_mode"` with the spec
 rendered as the block of §5.9, and Codex presented the steps in its reply. One turn.
 
+## OpenCode
+
+**OpenCode 1.18.29 · Windows 11 (win32-x64) · model
+`openrouter/thinkingmachines/inkling-small:free` · 2026-09-11.** All six scenarios passed on
+the first attempt, in about three minutes, most of it the two timeouts and the heartbeat. The
+model is a free OpenRouter model, so the run cost nothing; OpenCode reports tokens and a price
+for every step, and the longest run, the degraded path, used about 1 300 input and 190 output
+tokens.
+
+### Identity and configuration
+
+| Fact                                                     | Measured value                                                                                                                                                          |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Configuration                                            | `~/.config/opencode/opencode.json`, or under `$XDG_CONFIG_HOME` when it is set — on Windows too; JSON with comments allowed, one entry per server under `mcp`           |
+| Project configuration                                    | An `opencode.json` in the project, merged over the global one                                                                                                           |
+| Non-interactive command                                  | `opencode run --format json …`: one JSON event per line on stdout, the prompt last                                                                                      |
+| `clientInfo.name` in the `initialize` handshake (A-08)   | `opencode`                                                                                                                                                              |
+| `clientInfo.version`                                     | `1.18.29`, the CLI version                                                                                                                                              |
+| `environment` of the MCP entry reaches the server (A-02) | Yes, whole: `HANDOFF_AGENT` resolved the row, and `HANDOFF_PROBE_TOKEN` arrived beside `HANDOFF_PROBE` (A-23)                                                           |
+| The rest of the server's environment                     | OpenCode's own, whole; `USERDOMAIN` and `USERNAME` are in it, so the server finds the app's pipe                                                                        |
+| The server's working directory (A-24)                    | The folder OpenCode was started in, which OpenCode reads from `PWD` when that variable is set rather than from its own working directory                                |
+| Server processes started per session                     | One, and `initialize` precedes the first tool call (A-01)                                                                                                               |
+| The names the model sees                                 | `handoff_handoff_to_user`, `handoff_handoff_verify`, `handoff_handoff_runbooks`: OpenCode prefixes every tool with its server's name                                    |
+| Approval before a call                                   | None: `opencode run` calls an MCP tool without asking                                                                                                                   |
+| Images in tool results (A-07)                            | Reach a model that reads images: the colour of `image_probe` was named. With a text-only model the text of the result still arrives and the model says it sees no image |
+| End-of-turn hook                                         | None to register (below)                                                                                                                                                |
+
+`clientInfo.name` is in `src/adapters/capabilities.json` as `match.client_names: ["opencode"]`,
+so an entry written by hand without `HANDOFF_AGENT` still resolves to the OpenCode row.
+
+Whether an image reaches the model depends on the model the user picked in OpenCode, which
+the server cannot know. The row says `images_in_results: true` because the failure the other
+way is harmless: the image block travels beside the text, and a model that cannot read it
+still reads every word of the outcome (PRIN-10).
+
+### Tool timeouts and cancellation (A-04, A-09)
+
+Measured with `sleep_ms` against a 120 s sleep. OpenCode hands the entry's `timeout` to the
+MCP SDK as the request timeout of the call, and the SDK sends the server a real cancellation
+when it runs out, so both cuts are timed by the probe inside the server as well as by
+OpenCode's own record of the call.
+
+| Where the timeout was written | Configured | Call ended                                                                    | Server    | OpenCode  |
+| ----------------------------- | ---------- | ----------------------------------------------------------------------------- | --------- | --------- |
+| `timeout` of the entry        | 20 000 ms  | cut; the agent saw "MCP error -32001: Request timed out"; the server was told | 20 003 ms | 20 006 ms |
+| nothing configured            | —          | cut the same way                                                              | 59 944 ms | 60 006 ms |
+
+- **The per-server field exists, is honoured, and is in milliseconds**, as in Claude Code:
+  thirty minutes is `"timeout": 1800000`.
+- **A real MCP cancellation.** The probe's sleep ended `aborted` at the moment of the cut, so
+  `cancellation_notifications` is `true`.
+- **The default is a value, not a bound.** OpenCode's own configuration schema describes the
+  field as the timeout of every request to the server, five seconds when unset; a tool call
+  with nothing configured is not cut at five seconds but at sixty, the default of the MCP SDK
+  OpenCode passes the call to. `tool_timeout_ms_default` is therefore `60000`. The heartbeat
+  it gives is still the 50 s floor (§5.6), ten seconds before a cut that is now known rather
+  than guessed; the installer's thirty minutes make it moot.
+
+### The end-of-turn hook
+
+OpenCode 1.18.29 offers no command the agent runs at the end of a turn and whose answer it
+obeys: what it has are plugins, JavaScript modules loaded into OpenCode's own process. A
+plugin is code inside the agent, not the hook of this server's `hook stop`, and only measured
+behaviour may be relied on (PRIN-11). So `stop_hook` is `false`, the level is `base`, and the
+instruction in a `deferred` or `parked` outcome tells an OpenCode agent that nothing will
+remind it.
+
+### The degraded path (FM-03, FM-04)
+
+The same flow as for Codex, measured against the real OpenCode with `test/fake-app` listening
+and no timeout configured:
+
+1. The first `handoff_to_user` call was answered `in_progress` after **50 013 ms**, the 50 s
+   heartbeat, and the overlay received `handoff.detach_call` with reason `heartbeat`. With
+   OpenCode this is more than a margin: ten seconds later OpenCode would have cut the call
+   itself.
+2. OpenCode resumed, as that instruction says. The overlay reported that the user had deferred
+   the step, and the instruction OpenCode received was the no-hook variant.
+3. OpenCode resumed again before finishing, by itself, and received the final
+   `confirmed_by_user`.
+
+Three results, two resumes, and no channel line refused by the schema in either direction.
+
+### Text mode (E2E-8)
+
+With no overlay listening, `handoff_to_user` answered `status: "text_mode"` with the spec
+rendered as the block of §5.9, and OpenCode presented the steps in its reply.
+
+### A free model has a cost of its own
+
+A free OpenRouter model is served from a shared pool, and a busy one answers "temporarily
+rate-limited upstream" (measured once, on another free model). The run then ends with an
+`error` event before any tool is called and is reported as a harness failure; run it again,
+or name another model with `HANDOFF_CANARY_OPENCODE_MODEL`. A paid model works the same way,
+as long as the account can pay for the 32 000 output tokens OpenCode asks every request for.
+
 ## The scenarios
 
-| Scenario                   | Covers                                         | What it does                                                       |
-| -------------------------- | ---------------------------------------------- | ------------------------------------------------------------------ |
-| `observe`                  | A-01, A-02, A-05, A-06, A-08, A-11, A-23, A-24 | One `handoff_runbooks` call with the recording Stop hook installed |
-| `e2e-08-text-mode`         | E2E-8                                          | One `handoff_to_user` call with no overlay listening               |
-| `a03-timeout-honoured`     | A-03, A-09                                     | `sleep_ms` past `MCP_TOOL_TIMEOUT`                                 |
-| `a04-per-server-timeout`   | A-04, A-09                                     | `sleep_ms` past the per-server `timeout` field                     |
-| `a03-timeout-default`      | A-03                                           | `sleep_ms` for 70 s with nothing configured                        |
-| `codex-observe`            | A-01, A-02, A-08, A-23, A-24, SRV-19           | One `handoff_runbooks` call, read from the server's side           |
-| `codex-image`              | A-07                                           | One `image_probe` call; the model names the colour                 |
-| `codex-e2e-08-text-mode`   | E2E-8                                          | One `handoff_to_user` call with no overlay listening               |
-| `codex-per-server-timeout` | A-04, A-09                                     | `sleep_ms` past `tool_timeout_sec = 20`                            |
-| `codex-degraded-path`      | FM-03, FM-04, SRV-20                           | Heartbeat, resume, deferral and resume, against `fake-app`         |
-| `codex-default-timeout`    | FM-04                                          | `sleep_ms` for 120 s with nothing configured                       |
+| Scenario                      | Covers                                         | What it does                                                          |
+| ----------------------------- | ---------------------------------------------- | --------------------------------------------------------------------- |
+| `observe`                     | A-01, A-02, A-05, A-06, A-08, A-11, A-23, A-24 | One `handoff_runbooks` call with the recording Stop hook installed    |
+| `e2e-08-text-mode`            | E2E-8                                          | One `handoff_to_user` call with no overlay listening                  |
+| `a03-timeout-honoured`        | A-03, A-09                                     | `sleep_ms` past `MCP_TOOL_TIMEOUT`                                    |
+| `a04-per-server-timeout`      | A-04, A-09                                     | `sleep_ms` past the per-server `timeout` field                        |
+| `a03-timeout-default`         | A-03                                           | `sleep_ms` for 70 s with nothing configured                           |
+| `codex-observe`               | A-01, A-02, A-08, A-23, A-24, SRV-19           | One `handoff_runbooks` call, read from the server's side              |
+| `codex-image`                 | A-07                                           | One `image_probe` call; the model names the colour                    |
+| `codex-e2e-08-text-mode`      | E2E-8                                          | One `handoff_to_user` call with no overlay listening                  |
+| `codex-per-server-timeout`    | A-04, A-09                                     | `sleep_ms` past `tool_timeout_sec = 20`                               |
+| `codex-degraded-path`         | FM-03, FM-04, SRV-20                           | Heartbeat, resume, deferral and resume, against `fake-app`            |
+| `codex-default-timeout`       | FM-04                                          | `sleep_ms` for 120 s with nothing configured                          |
+| `opencode-observe`            | A-01, A-02, A-08, A-23, A-24, SRV-19           | One `handoff_runbooks` call, read from the server's side              |
+| `opencode-image`              | A-07                                           | One `image_probe` call; the model names the colour                    |
+| `opencode-e2e-08-text-mode`   | E2E-8                                          | One `handoff_to_user` call with no overlay listening                  |
+| `opencode-per-server-timeout` | A-04, A-09                                     | `sleep_ms` past `"timeout": 20000`                                    |
+| `opencode-degraded-path`      | FM-03, FM-04, SRV-20                           | Heartbeat, resume, deferral and resume, against `fake-app`            |
+| `opencode-default-timeout`    | FM-04, A-09                                    | `sleep_ms` for 120 s with nothing configured; cut at the 60 s default |
 
-Not covered here, and why: **A-07** is measured for Codex through `image_probe`; the Claude
-Code scenarios do not run it, and for Claude Code it rests on E2E-3, which needs an overlay.
+Not covered here, and why: **A-07** is measured for Codex and OpenCode through `image_probe`;
+the Claude Code scenarios do not run it, and for Claude Code it rests on E2E-3, which needs an
+overlay.
 **A-10** (`/mcp reconnect`) is interactive and stays a manual check; **A-12..A-26** are about
 platforms, OCR, capture and packaging rather than about the agent.
 
@@ -276,12 +385,12 @@ Every assertion declares what it looked at, and that decides what happens when i
 
 ## When to re-run it
 
-After every Claude Code or Codex update, and before any release that changes how the server
-talks to an agent. The workflow `.github/workflows/canary.yml` does the same thing on a
-`workflow_dispatch`, comparing the npm dist-tags of `@anthropic-ai/claude-code` and
-`@openai/codex` against `test/canary/last-claude-version` and `test/canary/last-codex-version`;
-each agent's job skips gracefully when its API key is not configured, which is the current
-state.
+After every Claude Code, Codex or OpenCode update, and before any release that changes how
+the server talks to an agent. The workflow `.github/workflows/canary.yml` does the same thing
+on a `workflow_dispatch`, comparing the npm dist-tags of `@anthropic-ai/claude-code`,
+`@openai/codex` and `opencode-ai` against `test/canary/last-claude-version`,
+`test/canary/last-codex-version` and `test/canary/last-opencode-version`; each agent's job
+skips gracefully when its API key is not configured, which is the current state.
 
 When a run's numbers differ from the tables above, update this page in the same commit as
 whatever the difference forced, and bump the version file of that agent.

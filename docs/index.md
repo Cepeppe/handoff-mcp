@@ -86,10 +86,11 @@ which reads nothing else still behaves correctly. The rows that ship today:
 | ----------------------- | ------ | ---------------------- | ---------------- | ------------------------------ |
 | `claude-code`           | `full` | yes                    | yes              | `timeout`, in milliseconds     |
 | `codex`                 | `base` | yes                    | no               | `tool_timeout_sec`, in seconds |
+| `opencode`              | `base` | yes                    | no               | `timeout`, in milliseconds     |
 | `unknown` (any other)   | `base` | no                     | no               | —                              |
 
-`cursor`, `copilot` and `opencode` are in the table with `status: planned` and enter it as
-their adapters ship. Every value of a shipped row was measured against the real agent;
+`cursor` and `copilot` are in the table with `status: planned` and enter it as their adapters
+ship. Every value of a shipped row was measured against the real agent;
 [measured agent facts](agent-facts.md) says when, and against which version.
 
 Remote agents (an agent running in the cloud rather than on your machine) find no socket and

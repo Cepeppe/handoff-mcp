@@ -1,0 +1,27 @@
+/**
+ * E2E-8 against OpenCode: a handoff opened with no overlay listening comes back as text mode
+ * (T-074, TECHNICAL-DESIGN §11.5, §5.9, SRV-14..16).
+ *
+ * The same spec, the same prompt and the same assertions as the Codex scenario, which reads only
+ * the server's observations and the shared transcript: the check is Codex's, imported, so the
+ * three agents are measured against one thing. `HANDOFF_HOME` is an empty temporary folder with
+ * no token file, so the server cannot reach an app and must answer `text_mode`.
+ */
+import { CANARY_SPEC } from '../../scenarios/e2e-08-text-mode.ts';
+import { codexTextModeScenario } from '../codex/text-mode.ts';
+import type { OpenCodeScenario } from './scenario.ts';
+
+const PROMPT = [
+  'Call the tool handoff_to_user of the MCP server handoff exactly once with this exact argument:',
+  JSON.stringify({ spec: CANARY_SPEC }),
+  'Then present the returned steps to me in your reply, one per line, and nothing else.',
+].join(' ');
+
+export const opencodeTextModeScenario: OpenCodeScenario = {
+  id: 'opencode-e2e-08-text-mode',
+  title: 'a handoff OpenCode opens with no overlay listening comes back as text mode',
+  covers: ['E2E-8'],
+  options: { prompt: PROMPT },
+  check: (run) => codexTextModeScenario.check(run),
+  facts: (run) => codexTextModeScenario.facts?.(run) ?? {},
+};

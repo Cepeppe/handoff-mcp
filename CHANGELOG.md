@@ -9,6 +9,35 @@ schema version, which is independent of the package version.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-11
+
+OpenCode is the third agent in the capability table, measured against the real OpenCode CLI
+rather than assumed. It is supported at `base` level, like Codex: it shows the images of a
+tool result and honours a per-server timeout, but offers no end-of-turn hook to register. It
+is also the first agent whose default tool timeout is a measured value rather than a lower
+bound: sixty seconds, which the 50 s heartbeat stays ahead of. The public formats and the
+channel definition are unchanged since `0.1.0`. `1.2.0` and `1.3.0` are not released: they
+are kept for the Cursor and GitHub Copilot adapters, which come later.
+
+### Added
+
+- The `opencode` row of the capability table is `supported`, with the values measured against
+  OpenCode 1.18.29: `clientInfo.name` `opencode`, images in tool results, the per-server
+  timeout field `timeout` (in milliseconds), no end-of-turn hook, an MCP cancellation when a
+  call times out, and a default timeout of 60 000 ms (`tool_timeout_ms_default`). An entry
+  written by hand with no `HANDOFF_AGENT` now resolves to the OpenCode row from the handshake.
+- OpenCode canary scenarios in `test/canary/agents/opencode/`: what the server sees of an
+  OpenCode session, images in tool results, E2E-8 in text mode, the per-server and the default
+  timeout, and the degraded path against a scripted overlay. `pnpm canary -- --agent opencode`
+  runs them alone, on a free OpenRouter model by default; every run is isolated from the
+  user's own OpenCode configuration (an inline configuration, an empty `XDG_CONFIG_HOME`,
+  project configuration off) and deletes the session it leaves in OpenCode's history.
+- An OpenCode job in `.github/workflows/canary.yml`, which runs on `OPENROUTER_API_KEY`, skips
+  without it, and diffs the published OpenCode against `test/canary/last-opencode-version`.
+- Documentation: registering the server in OpenCode (`docs/install-without-app.md`), its row
+  in the support-level table (`docs/index.md`), and what was measured against OpenCode
+  (`docs/agent-facts.md`).
+
 ## [1.1.0] - 2026-09-11
 
 Codex is the second agent in the capability table, measured against the real Codex CLI

@@ -286,7 +286,7 @@ describe('the pnpm canary command line', () => {
   it('refuses an agent it cannot run, rather than running nothing', () => {
     expect(parseCanaryArguments(['--agent', 'cursor']).error).toContain('cursor');
     expect(parseCanaryArguments(['--agent']).error).toBeDefined();
-    expect(CANARY_AGENTS).toEqual(['claude-code', 'codex']);
+    expect(CANARY_AGENTS).toEqual(['claude-code', 'codex', 'opencode']);
   });
 });
 

@@ -105,6 +105,20 @@ describe('null fields fall back to the unknown row', () => {
     expect(codex.heartbeat_after_ms).toBe(unknown.heartbeat_after_ms);
   });
 
+  it('keeps every value the opencode row measured, its 60 s default included (T-074)', () => {
+    const opencode = resolveCapabilityRow({ agent: 'opencode' });
+    expect(opencode.status).toBe('supported');
+    expect(opencode.support).toBe('base');
+    expect(opencode.stop_hook).toBe(false);
+    expect(opencode.subagent_stop_hook).toBe(false);
+    expect(opencode.user_request_delivery).toEqual(['clipboard_focus']);
+    expect(opencode.images_in_results).toBe(true);
+    expect(opencode.cancellation_notifications).toBe(true);
+    expect(opencode.per_server_timeout_field).toBe('timeout');
+    expect(opencode.tool_timeout_ms_default).toBe(60_000);
+    expect(opencode.heartbeat_after_ms).toBe(unknown.heartbeat_after_ms);
+  });
+
   it('keeps every value a supported row measured', () => {
     const claude = resolveCapabilityRow({ agent: 'claude-code' });
     expect(claude.images_in_results).toBe(true);

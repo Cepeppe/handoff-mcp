@@ -8,8 +8,9 @@
 # not one afternoon, and each agent's job **skips gracefully** rather than failing when its
 # secret is absent — a red run that only means "no key" teaches nobody anything.
 #
-# Two agents, two jobs, two credentials: Claude Code runs on `ANTHROPIC_API_KEY`, Codex
-# (T-066) on `OPENAI_API_KEY`, and each job runs only its own agent's scenarios.
+# Three agents, three jobs, three credentials: Claude Code runs on `ANTHROPIC_API_KEY`, Codex
+# (T-066) on `OPENAI_API_KEY`, OpenCode (T-074) on `OPENROUTER_API_KEY`, and each job runs
+# only its own agent's scenarios.
 #
 # This repository runs the canaries the server can run alone. Everything that needs the
 # overlay — E2E-1..7, 9..11 — lives in `handoff-app`'s own canary workflow.
@@ -34,6 +35,10 @@ on:
         description: 'Model to run the Codex canaries against'
         type: string
         default: gpt-5.6-luna
+      opencode_model:
+        description: 'Model to run the OpenCode canaries against'
+        type: string
+        default: openrouter/thinkingmachines/inkling-small:free
       open_issue:
         description: 'Open an issue when a scenario fails'
         type: boolean
@@ -67,6 +72,8 @@ jobs:
       changed: ${{ steps.version.outputs.changed }}
       codex_published: ${{ steps.codex.outputs.published }}
       codex_pinned: ${{ steps.codex.outputs.pinned }}
+      opencode_published: ${{ steps.opencode.outputs.published }}
+      opencode_pinned: ${{ steps.opencode.outputs.pinned }}
       runners: ${{ steps.runners.outputs.list }}
     steps:
       - uses: actions/checkout@v4
@@ -97,6 +104,19 @@ jobs:
             echo "Codex is still \`$pinned\`." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Codex moved from \`$pinned\` to \`$published\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - id: opencode
+        shell: bash
+        run: |
+          published="$(npm view opencode-ai dist-tags.latest)"
+          pinned="$(tr -d '[:space:]' < test/canary/last-opencode-version)"
+          echo "published=$published" >> "$GITHUB_OUTPUT"
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          if [ "$published" = "$pinned" ]; then
+            echo "OpenCode is still \`$pinned\`." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "OpenCode moved from \`$pinned\` to \`$published\`." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - id: runners
@@ -249,12 +269,78 @@ jobs:
           path: test/canary/results/last-run.json
           if-no-files-found: ignore
 
+  # The same shape for OpenCode (T-074). Its OpenRouter provider reads `OPENROUTER_API_KEY`
+  # from the environment — the variable OpenCode's own provider catalogue names — so there is
+  # no login step and the key is never on a command line. The harness itself isolates every
+  # run from the user's OpenCode configuration and deletes the session a run leaves behind.
+  opencode:
+    name: OpenCode · ${{ matrix.os }}
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.plan.outputs.runners) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - id: secret
+        shell: bash
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "OPENROUTER_API_KEY is not configured: the OpenCode canaries were skipped (T-074)." \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.secret.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - if: steps.secret.outputs.present == 'true'
+        run: pnpm build
+
+      - name: Install the published OpenCode
+        if: steps.secret.outputs.present == 'true'
+        run: npm install --global opencode-ai@${{ needs.plan.outputs.opencode_published }}
+
+      - name: Run the OpenCode canaries
+        if: steps.secret.outputs.present == 'true'
+        shell: bash
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          HANDOFF_CANARY_OPENCODE_MODEL: ${{ inputs.opencode_model }}
+        run: pnpm canary -- --agent opencode
+
+      - name: Report
+        if: always() && steps.secret.outputs.present == 'true'
+        shell: bash
+        run: node build/canary-report.mjs >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the report
+        if: always() && steps.secret.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: canary-opencode-${{ matrix.os }}
+          path: test/canary/results/last-run.json
+          if-no-files-found: ignore
+
   # The point of a release watch is to be told. The issue names the versions and the failing
   # assertions; the transcript is not in it, because a transcript is a conversation and this
   # repository is public.
   issue:
     name: Open an issue for the failing assertions
-    needs: [plan, canary, codex]
+    needs: [plan, canary, codex, opencode]
     if: failure() && inputs.open_issue
     runs-on: ubuntu-latest
     permissions:
@@ -276,11 +362,14 @@ jobs:
           PINNED: ${{ needs.plan.outputs.pinned }}
           CODEX_PUBLISHED: ${{ needs.plan.outputs.codex_published }}
           CODEX_PINNED: ${{ needs.plan.outputs.codex_pinned }}
+          OPENCODE_PUBLISHED: ${{ needs.plan.outputs.opencode_published }}
+          OPENCODE_PINNED: ${{ needs.plan.outputs.opencode_pinned }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           {
             echo "Claude Code \`$PUBLISHED\` (pinned in \`test/canary/last-claude-version\`: \`$PINNED\`)."
             echo "Codex \`$CODEX_PUBLISHED\` (pinned in \`test/canary/last-codex-version\`: \`$CODEX_PINNED\`)."
+            echo "OpenCode \`$OPENCODE_PUBLISHED\` (pinned in \`test/canary/last-opencode-version\`: \`$OPENCODE_PINNED\`)."
             echo
             echo "Run: $RUN_URL"
             echo
@@ -297,5 +386,5 @@ jobs:
             fi
           } > body.md
           gh issue create \
-            --title "Canary: assumptions failing against Claude Code $PUBLISHED or Codex $CODEX_PUBLISHED" \
+            --title "Canary: assumptions failing against Claude Code $PUBLISHED, Codex $CODEX_PUBLISHED or OpenCode $OPENCODE_PUBLISHED" \
             --body-file body.md

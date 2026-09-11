@@ -1,26 +1,27 @@
 /**
- * The canary driver: `pnpm canary` (T-023, T-066, TECHNICAL-DESIGN §11.5).
+ * The canary driver: `pnpm canary` (T-023, T-066, T-074, TECHNICAL-DESIGN §11.5).
  *
- * It runs the scenarios of `scenarios/` against Claude Code and those of `agents/codex/`
- * against Codex, classifies each run, retries a model failure exactly once, prints a report
- * on stderr and writes the whole thing — assertions and measured facts — to
- * `test/canary/results/last-run.json`, which is git-ignored and is what
+ * It runs the scenarios of `scenarios/` against Claude Code, those of `agents/codex/` against
+ * Codex and those of `agents/opencode/` against OpenCode, classifies each run, retries a model
+ * failure exactly once, prints a report on stderr and writes the whole thing — assertions and
+ * measured facts — to `test/canary/results/last-run.json`, which is git-ignored and is what
  * `docs/agent-facts.md` is written from.
  *
  * Usage:
  *
  * ```
- * pnpm build && pnpm canary                 # every scenario of both agents
- * pnpm canary -- --agent codex              # one agent's scenarios
+ * pnpm build && pnpm canary                 # every scenario of every agent
+ * pnpm canary -- --agent opencode           # one agent's scenarios
  * pnpm canary -- observe codex-observe      # only these
  * pnpm canary -- --list                     # what exists, without running anything
  * ```
  *
  * Environment: `HANDOFF_CANARY_MODEL` pins the Claude model (default `sonnet`),
  * `HANDOFF_CANARY_CODEX_MODEL` the Codex one (default `gpt-5.6-luna`),
- * `HANDOFF_CANARY_CODEX` names the `codex` program when it is not the one on `PATH`, and
- * `HANDOFF_CANARY_KEEP=1` keeps each run's temporary project so a failure can be read by
- * hand.
+ * `HANDOFF_CANARY_OPENCODE_MODEL` the OpenCode one (default a free OpenRouter model, see
+ * `agents/opencode/workspace.ts`), `HANDOFF_CANARY_CODEX` and `HANDOFF_CANARY_OPENCODE` name
+ * the program when it is not the one on `PATH`, and `HANDOFF_CANARY_KEEP=1` keeps each run's
+ * temporary project so a failure can be read by hand.
  *
  * Exit codes: **0** every scenario passed · **1** at least one failed · **2** the harness
  * could not run (no bundle, no agent, an unknown scenario id or agent).
@@ -34,6 +35,9 @@ import { join } from 'node:path';
 import { CODEX_SCENARIOS } from './agents/codex/index.ts';
 import { runCodex } from './agents/codex/runner.ts';
 import { CODEX_DEFAULT_MODEL } from './agents/codex/workspace.ts';
+import { OPENCODE_SCENARIOS } from './agents/opencode/index.ts';
+import { runOpenCode } from './agents/opencode/runner.ts';
+import { OPENCODE_DEFAULT_MODEL } from './agents/opencode/workspace.ts';
 import { classify, reported, shouldRetry, type Assertion, type RunVerdict } from './classify.ts';
 import { parseCanaryArguments, type CanaryAgent } from './cli.ts';
 import { DEFAULT_MODEL, REPO_ROOT, SERVER_BUNDLE, runClaude, type CanaryRun } from './runner.ts';
@@ -49,9 +53,10 @@ export const LAST_VERSION_FILE = join(REPO_ROOT, 'test', 'canary', 'last-claude-
 const AGENT_NAMES: Readonly<Record<CanaryAgent, string>> = {
   'claude-code': 'Claude Code',
   codex: 'Codex',
+  opencode: 'OpenCode',
 };
 
-/** One scenario of either agent, as the driver runs it. */
+/** One scenario of any agent, as the driver runs it. */
 interface Runnable {
   readonly agent: CanaryAgent;
   readonly id: string;
@@ -78,6 +83,15 @@ const RUNNABLES: readonly Runnable[] = [
     title: scenario.title,
     covers: scenario.covers,
     run: () => runCodex(scenario.options),
+    check: (run) => scenario.check(run),
+    facts: (run) => scenario.facts?.(run) ?? {},
+  })),
+  ...OPENCODE_SCENARIOS.map((scenario): Runnable => ({
+    agent: 'opencode',
+    id: scenario.id,
+    title: scenario.title,
+    covers: scenario.covers,
+    run: () => runOpenCode(scenario.options),
     check: (run) => scenario.check(run),
     facts: (run) => scenario.facts?.(run) ?? {},
   })),
@@ -200,6 +214,11 @@ async function main(argv: readonly string[]): Promise<number> {
     model: process.env['HANDOFF_CANARY_MODEL'] ?? DEFAULT_MODEL,
     ...(agents.includes('codex')
       ? { codex_model: process.env['HANDOFF_CANARY_CODEX_MODEL'] ?? CODEX_DEFAULT_MODEL }
+      : {}),
+    ...(agents.includes('opencode')
+      ? {
+          opencode_model: process.env['HANDOFF_CANARY_OPENCODE_MODEL'] ?? OPENCODE_DEFAULT_MODEL,
+        }
       : {}),
     scenarios: reports,
     failed: reported(reports.flatMap((scenario) => scenario.assertions)).length,

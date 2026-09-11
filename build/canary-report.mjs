@@ -39,7 +39,10 @@ const cost = priced.reduce((total, scenario) => total + scenario.costUsd, 0);
 
 const models =
   `model \`${report.model}\`` +
-  (typeof report.codex_model === 'string' ? ` · codex model \`${report.codex_model}\`` : '');
+  (typeof report.codex_model === 'string' ? ` · codex model \`${report.codex_model}\`` : '') +
+  (typeof report.opencode_model === 'string'
+    ? ` · opencode model \`${report.opencode_model}\``
+    : '');
 say(
   `**${report.scenarios.length - failed.length}/${report.scenarios.length} scenarios passed** ` +
     `· ${report.platform} · ${models} · $${cost.toFixed(4)} · ${report.generated_at}`,

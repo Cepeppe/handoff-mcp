@@ -56,6 +56,11 @@ describe('when it runs', () => {
     expect(workflow).toContain('the Codex canaries were skipped (T-066)');
   });
 
+  it('skips the OpenCode job the same way when OPENROUTER_API_KEY is absent (T-074)', () => {
+    expect(workflow).toContain('OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}');
+    expect(workflow).toContain('the OpenCode canaries were skipped (T-074)');
+  });
+
   it('keeps macOS opt-in and its label an input, never a literal (§0.4 item 7, T-009)', () => {
     expect(workflow).toContain('inputs.macos_runner');
     // A literal label anywhere but the default of the input is the trap T-009 hit.
@@ -77,6 +82,11 @@ describe('what it checks and reports', () => {
     expect(readFileSync(join(ROOT, 'test', 'canary', 'last-codex-version'), 'utf8')).toMatch(
       /^\d+\.\d+\.\d+\n$/u,
     );
+    expect(workflow).toContain('npm view opencode-ai dist-tags.latest');
+    expect(workflow).toContain('test/canary/last-opencode-version');
+    expect(readFileSync(join(ROOT, 'test', 'canary', 'last-opencode-version'), 'utf8')).toMatch(
+      /^\d+\.\d+\.\d+\n$/u,
+    );
   });
 
   it('installs the versions it just resolved, rather than latest', () => {
@@ -86,6 +96,18 @@ describe('what it checks and reports', () => {
     expect(workflow).toContain(
       'npm install --global @openai/codex@${{ needs.plan.outputs.codex_published }}',
     );
+    expect(workflow).toContain(
+      'npm install --global opencode-ai@${{ needs.plan.outputs.opencode_published }}',
+    );
+  });
+
+  it('hands OpenCode its key in the variable its provider reads, never on a command line', () => {
+    // OpenCode's OpenRouter provider names OPENROUTER_API_KEY in its own catalogue, so the key
+    // goes into the step's environment and no login command ever sees it.
+    const job = workflow.slice(workflow.indexOf('  opencode:'), workflow.indexOf('  issue:'));
+    expect(job).toContain('OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}');
+    expect(job).toContain('HANDOFF_CANARY_OPENCODE_MODEL: ${{ inputs.opencode_model }}');
+    expect(job).not.toMatch(/opencode (?:auth|providers) login/u);
   });
 
   it('logs Codex in from stdin, so the key is never on a command line', () => {
@@ -97,16 +119,18 @@ describe('what it checks and reports', () => {
     expect(workflow).toContain('run: pnpm build');
     expect(workflow).toContain('run: pnpm canary -- --agent claude-code');
     expect(workflow).toContain('run: pnpm canary -- --agent codex');
+    expect(workflow).toContain('run: pnpm canary -- --agent opencode');
   });
 
-  it('keeps one report per agent and runner, so neither overwrites the other', () => {
+  it('keeps one report per agent and runner, so none overwrites another', () => {
     expect(workflow).toContain('name: canary-claude-code-${{ matrix.os }}');
     expect(workflow).toContain('name: canary-codex-${{ matrix.os }}');
+    expect(workflow).toContain('name: canary-opencode-${{ matrix.os }}');
     expect(workflow).toContain('pattern: canary-*');
   });
 
-  it('opens an issue only on a failure of either agent, and asks for the permission that needs', () => {
-    expect(workflow).toContain('needs: [plan, canary, codex]');
+  it('opens an issue only on a failure of any agent, and asks for the permission that needs', () => {
+    expect(workflow).toContain('needs: [plan, canary, codex, opencode]');
     expect(workflow).toContain('if: failure() && inputs.open_issue');
     expect(workflow).toContain('issues: write');
     expect(workflow).toContain('gh issue create');
@@ -177,6 +201,18 @@ describe('the report renderer', () => {
     expect(markdown).toContain('observed: no');
     expect(markdown).toContain('**[note] A-09**');
     expect(markdown).not.toContain('a client name arrives');
+  });
+
+  it('names the OpenCode model when OpenCode scenarios ran, and only then (T-074)', () => {
+    const file = join(scratch(), 'last-run.json');
+    writeFileSync(file, JSON.stringify(report), 'utf8');
+    expect(render(file)).not.toContain('opencode model');
+    writeFileSync(
+      file,
+      JSON.stringify({ ...report, opencode_model: 'openrouter/vendor/model:free' }),
+      'utf8',
+    );
+    expect(render(file)).toContain('opencode model `openrouter/vendor/model:free`');
   });
 
   it('names the Codex model when Codex scenarios ran, and only then', () => {

@@ -147,9 +147,32 @@ describe('capabilities.json', () => {
     });
   });
 
+  it('states the opencode row as the T-074 canary measured it', () => {
+    // OpenCode 1.18.29, 2026-09-11, `test/canary/agents/opencode` and `docs/agent-facts.md`: no
+    // end-of-turn hook to register, images reach a model that reads them, the per-server field
+    // is `timeout` in milliseconds, a timed-out call is cancelled (the MCP SDK's own request
+    // timeout), and the default is a measured 60 s rather than a lower bound.
+    expect(CAPABILITY_TABLE.find((row) => row.agent_id === 'opencode')).toEqual({
+      agent_id: 'opencode',
+      display_name: 'OpenCode',
+      status: 'supported',
+      support: 'base',
+      match: { env: 'opencode', client_names: ['opencode'] },
+      tool_timeout_ms_default: 60000,
+      per_server_timeout_field: 'timeout',
+      images_in_results: true,
+      stop_hook: false,
+      subagent_stop_hook: false,
+      session_identity: 'parent_pid',
+      user_request_delivery: ['clipboard_focus'],
+      cancellation_notifications: true,
+      heartbeat_after_ms: null,
+    });
+  });
+
   it('keeps every planned adapter at base support with unmeasured fields null', () => {
     const planned = CAPABILITY_TABLE.filter((row) => row.status === 'planned');
-    expect(planned.map((row) => row.agent_id)).toEqual(['cursor', 'copilot', 'opencode']);
+    expect(planned.map((row) => row.agent_id)).toEqual(['cursor', 'copilot']);
     for (const row of planned) {
       expect(row.support).toBe('base');
       expect(row.tool_timeout_ms_default).toBeNull();
@@ -161,12 +184,13 @@ describe('capabilities.json', () => {
 
   it('records a client name only where the canary suite measured one (A-08)', () => {
     // `claude-code` is what Claude Code 2.1.263 sends in the `initialize` handshake (measured
-    // on 2026-09-08) and `codex-mcp-client` what Codex 0.153.4 sends (2026-09-10), both by
-    // `test/canary` and written down in `docs/agent-facts.md`. No other adapter has shipped,
-    // so no other list may hold a guess.
+    // on 2026-09-08), `codex-mcp-client` what Codex 0.153.4 sends (2026-09-10) and `opencode`
+    // what OpenCode 1.18.29 sends (2026-09-11), all by `test/canary` and written down in
+    // `docs/agent-facts.md`. No other adapter has shipped, so no other list may hold a guess.
     const measured: Readonly<Record<string, readonly string[]>> = {
       'claude-code': ['claude-code'],
       codex: ['codex-mcp-client'],
+      opencode: ['opencode'],
     };
     for (const row of CAPABILITY_TABLE) {
       expect(row.match.client_names, row.agent_id).toEqual(measured[row.agent_id] ?? []);
@@ -178,6 +202,7 @@ describe('capabilities.json', () => {
     // gets the agent's row instead of `unknown`.
     expect(resolveRow({ clientName: 'claude-code' }).agent_id).toBe('claude-code');
     expect(resolveRow({ clientName: 'codex-mcp-client' }).agent_id).toBe('codex');
+    expect(resolveRow({ clientName: 'opencode' }).agent_id).toBe('opencode');
   });
 
   it('keys the editor-hosted agents on the ancestor chain (ADPT-02, R-12)', () => {

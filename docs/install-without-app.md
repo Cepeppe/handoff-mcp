@@ -72,6 +72,35 @@ entry's `env`. The two the server needs to find an overlay on Windows, `USERDOMA
 0.153.4 on Windows, the server started as `node <path>/dist/handoff-mcp.cjs serve`; see
 [measured agent facts](agent-facts.md#codex-cli).
 
+## Registering it in OpenCode
+
+OpenCode reads its MCP servers from `~/.config/opencode/opencode.json` — under
+`$XDG_CONFIG_HOME` when that is set, on Windows as elsewhere — one entry per server under
+`mcp`:
+
+```json
+{
+  "mcp": {
+    "handoff": {
+      "type": "local",
+      "command": ["npx", "-y", "baton-handoff-mcp"],
+      "environment": { "HANDOFF_AGENT": "opencode" }
+    }
+  }
+}
+```
+
+The command and its arguments are **one array**, and the variables are `environment`, not
+`env`. A project's own `opencode.json` takes the same entry and is merged over the global one.
+OpenCode asks no approval before it calls an MCP tool, so nothing else is needed, and
+`opencode mcp list` shows the entry once it is there. The model sees the tools as
+`handoff_handoff_to_user` and so on: OpenCode puts the server's name in front of each.
+
+OpenCode starts its servers with its own whole environment plus the entry's `environment`, so
+`USERDOMAIN` and `USERNAME` reach the server on Windows. This was measured with OpenCode
+1.18.29 on Windows, the server started as `node <path>/dist/handoff-mcp.cjs serve`; see
+[measured agent facts](agent-facts.md#opencode).
+
 Any other MCP client works the same way: a stdio server, one command, no arguments. What
 changes is the name and the shape of that client's configuration file.
 
@@ -91,8 +120,8 @@ step 1 you can silently land on `unknown`, which heartbeats every 50 seconds and
 images and no hook. Everything still works — that is what `base` support means — but you get
 the cautious version of it.
 
-The value is the agent id from the table: `claude-code` and `codex` today, with `cursor`,
-`copilot` and `opencode` reserved for their adapters. `handoff-mcp doctor` prints the row it
+The value is the agent id from the table: `claude-code`, `codex` and `opencode` today, with
+`cursor` and `copilot` reserved for their adapters. `handoff-mcp doctor` prints the row it
 resolved and whether it came from `HANDOFF_AGENT` or from the `unknown` row — it has no MCP
 handshake of its own, so it cannot show you step 2.
 
@@ -105,7 +134,10 @@ hit, the agent calls back with `resume`, and the loop continues for as long as t
 
 - If your client supports a **per-server timeout**, raise it for this entry alone. In Claude
   Code that is a `"timeout"` field, in milliseconds, next to `"command"`. In Codex it is
-  `tool_timeout_sec` in the server's table, in **seconds**: `tool_timeout_sec = 1800`.
+  `tool_timeout_sec` in the server's table, in **seconds**: `tool_timeout_sec = 1800`. In
+  OpenCode it is `"timeout"` in the server's entry, in milliseconds again — and more worth
+  setting than elsewhere, because with nothing configured OpenCode cuts a call after sixty
+  seconds.
 - Set `HANDOFF_TOOL_TIMEOUT_MS` in the entry's `env` to the same duration in milliseconds, so
   the server knows what you configured and can heartbeat one minute before it rather than
   guessing.
@@ -130,6 +162,15 @@ args = ["-y", "baton-handoff-mcp"]
 env = { HANDOFF_AGENT = "codex", HANDOFF_TOOL_TIMEOUT_MS = "1800000" }
 default_tools_approval_mode = "approve"
 tool_timeout_sec = 1800
+```
+
+```json
+{
+  "type": "local",
+  "command": ["npx", "-y", "baton-handoff-mcp"],
+  "environment": { "HANDOFF_AGENT": "opencode", "HANDOFF_TOOL_TIMEOUT_MS": "1800000" },
+  "timeout": 1800000
+}
 ```
 
 The heartbeat is the configured timeout minus one minute, never less than 50 seconds.
@@ -166,17 +207,19 @@ subcommand begins.
 The hook never blocks on uncertainty: no overlay, a refused token, a malformed payload or an
 answer that comes too late all print nothing and exit 0.
 
-**Codex has no hook to register.** Its row says so, and the instruction in every outcome then
-tells the agent that nothing will remind it and that it has to keep the handoff id itself —
-which is what `base` support means. No hook declared for `codex exec` ran in any of the places
-tried against Codex 0.153.4 (see [measured agent facts](agent-facts.md#codex-cli)).
+**Codex and OpenCode have no hook to register.** Their rows say so, and the instruction in
+every outcome then tells the agent that nothing will remind it and that it has to keep the
+handoff id itself — which is what `base` support means. No hook declared for `codex exec` ran
+in any of the places tried against Codex 0.153.4, and OpenCode 1.18.29 has plugins rather than
+a command it runs at the end of a turn (see [measured agent facts](agent-facts.md#codex-cli)
+and [its OpenCode section](agent-facts.md#opencode)).
 
 ## Check it: `doctor`
 
 ```console
 $ handoff-mcp doctor
 server
-  version                    1.1.0
+  version                    1.4.0
   protocol_version           1
   capabilities_version       1
   node                       v24.18.0
