@@ -27,7 +27,12 @@
  */
 import { readFileSync } from 'node:fs';
 
-import { capabilityRowForHello, resolveCapabilityRow, toolTimeoutMs } from './adapters';
+import {
+  capabilityRowForHello,
+  resolveCapabilityRow,
+  resolveSessionIdentity,
+  toolTimeoutMs,
+} from './adapters';
 import { ChannelClient } from './channel';
 import { readConfig } from './config';
 import { runDoctor } from './doctor';
@@ -416,7 +421,10 @@ function runRunbooksSearch(query: RunbooksSearchArgs, streams: CliStreams): numb
  * `handoff-mcp serve`: the three MCP tools over stdio (§5.3).
  *
  * The order is the one §5.3 writes down. The process identity is resolved first, because
- * `hello` carries it and it costs one `ps` on macOS and nothing anywhere else. The transport
+ * `hello` carries it and it costs one `ps` on macOS and nothing on Linux or Windows — except
+ * for a server an editor may have started (`VSCODE_PID` set), which walks its chain on
+ * Windows too, because its session identity is decided from the names in that chain (T-069,
+ * `src/adapters/editor.ts`). The transport
  * then starts serving, and the channel starts connecting from `onInitialized` — after the
  * MCP handshake, because `hello` also carries the `client` the handshake names and the
  * capability row §5.6 resolves from it. That is still session start and not the first tool
@@ -435,8 +443,11 @@ function runRunbooksSearch(query: RunbooksSearchArgs, streams: CliStreams): numb
 async function runServe(streams: CliStreams): Promise<number> {
   const config = readConfig();
   const logger = createLogger(config.logLevel, streams.err);
-  const identity = await resolveProcessIdentity();
+  const identity = await resolveProcessIdentity({ windowsChain: config.editorPid !== undefined });
   const row = resolveCapabilityRow({ agent: config.agent });
+  // A fact about this session, not about the agent: sent only when it is the editor key.
+  const session = resolveSessionIdentity(identity.ancestors, config.editorPid);
+  const sessionIdentity = session.editor === undefined ? undefined : session.kind;
 
   const channel = new ChannelClient({
     identity: {
@@ -448,7 +459,7 @@ async function runServe(streams: CliStreams): Promise<number> {
     },
     agentId: row.agent_id,
     client: { name: row.agent_id, version: VERSION },
-    capabilityRow: capabilityRowForHello(row, toolTimeoutMs(row, config)),
+    capabilityRow: capabilityRowForHello(row, toolTimeoutMs(row, config), sessionIdentity),
     serverVersion: VERSION,
     logger,
   });
@@ -464,7 +475,11 @@ async function runServe(streams: CliStreams): Promise<number> {
         channel.describeSession({
           agentId: resolved.agent_id,
           client,
-          capabilityRow: capabilityRowForHello(resolved, toolTimeoutMs(resolved, config)),
+          capabilityRow: capabilityRowForHello(
+            resolved,
+            toolTimeoutMs(resolved, config),
+            sessionIdentity,
+          ),
         });
         channel.start();
       },

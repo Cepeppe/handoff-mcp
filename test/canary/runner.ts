@@ -137,6 +137,11 @@ export interface AppTranscript {
 export interface CanaryRun {
   /** The overlay's side, when the scenario started one. */
   readonly app?: AppTranscript;
+  /**
+   * The process the harness launched itself, when a scenario starts the agent's host rather
+   * than the agent (T-069: Cursor's editor, whose process its servers must name in their chain).
+   */
+  readonly launched?: { readonly pid: number };
   readonly exitCode: number | null;
   readonly durationMs: number;
   readonly timedOut: boolean;

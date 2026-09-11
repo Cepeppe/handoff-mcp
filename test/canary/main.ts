@@ -1,10 +1,11 @@
 /**
- * The canary driver: `pnpm canary` (T-023, T-066, T-074, TECHNICAL-DESIGN §11.5).
+ * The canary driver: `pnpm canary` (T-023, T-066, T-074, T-069, TECHNICAL-DESIGN §11.5).
  *
  * It runs the scenarios of `scenarios/` against Claude Code, those of `agents/codex/` against
- * Codex and those of `agents/opencode/` against OpenCode, classifies each run, retries a model
- * failure exactly once, prints a report on stderr and writes the whole thing — assertions and
- * measured facts — to `test/canary/results/last-run.json`, which is git-ignored and is what
+ * Codex, those of `agents/opencode/` against OpenCode and those of `agents/cursor/` against
+ * Cursor's editor and its CLI, classifies each run, retries a model failure exactly once,
+ * prints a report on stderr and writes the whole thing — assertions and measured facts — to
+ * `test/canary/results/last-run.json`, which is git-ignored and is what
  * `docs/agent-facts.md` is written from.
  *
  * Usage:
@@ -19,9 +20,14 @@
  * Environment: `HANDOFF_CANARY_MODEL` pins the Claude model (default `sonnet`),
  * `HANDOFF_CANARY_CODEX_MODEL` the Codex one (default `gpt-5.6-luna`),
  * `HANDOFF_CANARY_OPENCODE_MODEL` the OpenCode one (default a free OpenRouter model, see
- * `agents/opencode/workspace.ts`), `HANDOFF_CANARY_CODEX` and `HANDOFF_CANARY_OPENCODE` name
- * the program when it is not the one on `PATH`, and `HANDOFF_CANARY_KEEP=1` keeps each run's
+ * `agents/opencode/workspace.ts`), `HANDOFF_CANARY_CURSOR_MODEL` the Cursor one (default
+ * `auto`), `HANDOFF_CANARY_CODEX`, `HANDOFF_CANARY_OPENCODE` and `HANDOFF_CANARY_CURSOR` name
+ * the program when it is not the one on `PATH`, `HANDOFF_CANARY_CURSOR_EDITOR` names Cursor's
+ * editor when it is not where it installs itself, and `HANDOFF_CANARY_KEEP=1` keeps each run's
  * temporary project so a failure can be read by hand.
+ *
+ * The Cursor scenarios are run by hand and rarely: each CLI run spends one of the account's
+ * requests (T-068), and the editor's opens a Cursor window for the seconds it takes.
  *
  * Exit codes: **0** every scenario passed · **1** at least one failed · **2** the harness
  * could not run (no bundle, no agent, an unknown scenario id or agent).
@@ -35,6 +41,8 @@ import { join } from 'node:path';
 import { CODEX_SCENARIOS } from './agents/codex/index.ts';
 import { runCodex } from './agents/codex/runner.ts';
 import { CODEX_DEFAULT_MODEL } from './agents/codex/workspace.ts';
+import { CURSOR_SCENARIOS, runCursorScenario } from './agents/cursor/index.ts';
+import { CURSOR_DEFAULT_MODEL } from './agents/cursor/workspace.ts';
 import { OPENCODE_SCENARIOS } from './agents/opencode/index.ts';
 import { runOpenCode } from './agents/opencode/runner.ts';
 import { OPENCODE_DEFAULT_MODEL } from './agents/opencode/workspace.ts';
@@ -54,6 +62,7 @@ const AGENT_NAMES: Readonly<Record<CanaryAgent, string>> = {
   'claude-code': 'Claude Code',
   codex: 'Codex',
   opencode: 'OpenCode',
+  cursor: 'Cursor',
 };
 
 /** One scenario of any agent, as the driver runs it. */
@@ -92,6 +101,15 @@ const RUNNABLES: readonly Runnable[] = [
     title: scenario.title,
     covers: scenario.covers,
     run: () => runOpenCode(scenario.options),
+    check: (run) => scenario.check(run),
+    facts: (run) => scenario.facts?.(run) ?? {},
+  })),
+  ...CURSOR_SCENARIOS.map((scenario): Runnable => ({
+    agent: 'cursor',
+    id: scenario.id,
+    title: scenario.title,
+    covers: scenario.covers,
+    run: () => runCursorScenario(scenario),
     check: (run) => scenario.check(run),
     facts: (run) => scenario.facts?.(run) ?? {},
   })),
@@ -219,6 +237,9 @@ async function main(argv: readonly string[]): Promise<number> {
       ? {
           opencode_model: process.env['HANDOFF_CANARY_OPENCODE_MODEL'] ?? OPENCODE_DEFAULT_MODEL,
         }
+      : {}),
+    ...(agents.includes('cursor')
+      ? { cursor_model: process.env['HANDOFF_CANARY_CURSOR_MODEL'] ?? CURSOR_DEFAULT_MODEL }
       : {}),
     scenarios: reports,
     failed: reported(reports.flatMap((scenario) => scenario.assertions)).length,

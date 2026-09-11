@@ -101,6 +101,40 @@ OpenCode starts its servers with its own whole environment plus the entry's `env
 1.18.29 on Windows, the server started as `node <path>/dist/handoff-mcp.cjs serve`; see
 [measured agent facts](agent-facts.md#opencode).
 
+## Registering it in Cursor
+
+Cursor reads its MCP servers from `~/.cursor/mcp.json`, or from `.cursor/mcp.json` in a
+project, and its editor and its Agent CLI (`agent`) read the same two files:
+
+```json
+{
+  "mcpServers": {
+    "handoff": {
+      "command": "npx",
+      "args": ["-y", "baton-handoff-mcp"],
+      "env": { "HANDOFF_AGENT": "cursor" }
+    }
+  }
+}
+```
+
+The editor starts every server of the user file as a window opens. The CLI refuses a server of
+a project file until it is approved — `agent mcp enable handoff`, or `--approve-mcps` for one
+run — and in print mode (`agent -p`) it refuses to call a tool that is not annotated read-only
+unless a permission rule allows it: add `"Mcp(handoff:*)"` to `permissions.allow`, in
+`~/.cursor/cli-config.json` or in the project's `.cursor/cli.json`. That rule allows this
+server's tools and nothing else, where `--force` would allow every command.
+
+Cursor reads no timeout from the entry: the CLI cuts a call after 60 seconds and the editor
+after two minutes without progress, and the server's 50-second heartbeat answers before
+either, which is all it needs. The editor starts the server in your home folder and names the
+workspace in `WORKSPACE_FOLDER_PATHS`, which the server takes as its project folder. Started
+by the editor directly — `node` and the path of `dist/handoff-mcp.cjs` with `serve`, or the
+app's own executable — the server tells the overlay that the editor hosts the session; through
+`npx` there is a launcher in between, and the session is keyed on its parent like a CLI
+agent's. This was measured with Cursor 3.20.10 and the CLI 2026.09.10-fd3934a on Windows; see
+[measured agent facts](agent-facts.md#cursor).
+
 Any other MCP client works the same way: a stdio server, one command, no arguments. What
 changes is the name and the shape of that client's configuration file.
 
@@ -120,8 +154,8 @@ step 1 you can silently land on `unknown`, which heartbeats every 50 seconds and
 images and no hook. Everything still works — that is what `base` support means — but you get
 the cautious version of it.
 
-The value is the agent id from the table: `claude-code`, `codex` and `opencode` today, with
-`cursor` and `copilot` reserved for their adapters. `handoff-mcp doctor` prints the row it
+The value is the agent id from the table: `claude-code`, `codex`, `cursor` and `opencode`
+today, with `copilot` reserved for its adapter. `handoff-mcp doctor` prints the row it
 resolved and whether it came from `HANDOFF_AGENT` or from the `unknown` row — it has no MCP
 handshake of its own, so it cannot show you step 2.
 
@@ -138,6 +172,10 @@ hit, the agent calls back with `resume`, and the loop continues for as long as t
   OpenCode it is `"timeout"` in the server's entry, in milliseconds again — and more worth
   setting than elsewhere, because with nothing configured OpenCode cuts a call after sixty
   seconds.
+- **Cursor has none**, and nothing in its entry raises the limit: its CLI cuts a call after
+  sixty seconds and its editor after two minutes without progress. Leave
+  `HANDOFF_TOOL_TIMEOUT_MS` out of a Cursor entry as well, so that the server keeps its
+  50-second heartbeat ahead of the cut.
 - Set `HANDOFF_TOOL_TIMEOUT_MS` in the entry's `env` to the same duration in milliseconds, so
   the server knows what you configured and can heartbeat one minute before it rather than
   guessing.
@@ -207,12 +245,17 @@ subcommand begins.
 The hook never blocks on uncertainty: no overlay, a refused token, a malformed payload or an
 answer that comes too late all print nothing and exit 0.
 
-**Codex and OpenCode have no hook to register.** Their rows say so, and the instruction in
-every outcome then tells the agent that nothing will remind it and that it has to keep the
-handoff id itself — which is what `base` support means. No hook declared for `codex exec` ran
-in any of the places tried against Codex 0.153.4, and OpenCode 1.18.29 has plugins rather than
-a command it runs at the end of a turn (see [measured agent facts](agent-facts.md#codex-cli)
-and [its OpenCode section](agent-facts.md#opencode)).
+**Codex, OpenCode and Cursor have no hook to register.** Their rows say so, and the
+instruction in every outcome then tells the agent that nothing will remind it and that it has
+to keep the handoff id itself — which is what `base` support means. No hook declared for
+`codex exec` ran in any of the places tried against Codex 0.153.4, and OpenCode 1.18.29 has
+plugins rather than a command it runs at the end of a turn (see
+[measured agent facts](agent-facts.md#codex-cli) and
+[its OpenCode section](agent-facts.md#opencode)). Cursor has hooks, but none reaches this one:
+the payload Cursor hands a `stop` hook — its own, or a Claude Code `Stop` hook it runs as its
+own — carries no `stop_hook_active`, so `handoff-mcp hook stop` answers it with nothing. The
+hook above, installed for Claude Code, is therefore harmless when Cursor runs it (see
+[its Cursor section](agent-facts.md#cursor)).
 
 ## Check it: `doctor`
 

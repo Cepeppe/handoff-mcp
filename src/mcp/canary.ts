@@ -84,6 +84,10 @@ export const CANARY_OBSERVATIONS_FILE = 'observations.jsonl';
  * DD-26). They are not the MCP entry's to set but the agent's to pass on, and an agent that
  * starts its servers with a cleaned environment — Codex does (T-066) — would move the
  * server's endpoint away from the app's without either side noticing.
+ *
+ * `WORKSPACE_FOLDER_PATHS` and `VSCODE_PID` are what an editor tells the servers its
+ * extension host starts (T-069): where the workspace is, and which process the editor is.
+ * They decide the project folder and the session identity of a session an editor started.
  */
 export const CANARY_PROBE_ENV_NAMES: readonly string[] = [
   'HANDOFF_AGENT',
@@ -95,6 +99,8 @@ export const CANARY_PROBE_ENV_NAMES: readonly string[] = [
   'HANDOFF_PROBE_TOKEN',
   'USERDOMAIN',
   'USERNAME',
+  'WORKSPACE_FOLDER_PATHS',
+  'VSCODE_PID',
 ];
 
 /** The longest sleep the probe will honour: past this it is a hung session, not a probe. */

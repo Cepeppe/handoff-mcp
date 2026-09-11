@@ -9,6 +9,45 @@ schema version, which is independent of the package version.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-11
+
+Cursor is the fourth agent in the capability table, on both of its surfaces, measured against
+Cursor 3.20.10 and its Agent CLI rather than assumed. It is supported at `base` level: images
+reach the model and a call that times out is cancelled rather than abandoned, but no
+end-of-turn hook of Cursor can reach this server's hook, and Cursor has no per-server timeout
+to raise. It is also the first editor-hosted agent: Cursor's editor starts this server from
+its own extension host, in the user's home folder, and the server now says so to the app. The
+public formats and the channel definition are unchanged since `0.1.0`; the session identity
+travels in an optional field `hello` already had. `1.2.0` and `1.3.0` stay unreleased for
+good: a number below `1.4.0` would read as a downgrade to an installation's in-place update,
+so the adapters that follow `1.4.0` take `1.5.0` onward.
+
+### Added
+
+- The `cursor` row of the capability table is `supported`, with the values measured on
+  2026-09-11: `clientInfo.name` `cursor-vscode` from the editor and `Cursor` from the CLI,
+  images in tool results, no per-server timeout field, a default timeout of 60 000 ms (the
+  CLI's, where the MCP SDK cuts a call and cancels it), and no end-of-turn hook. An entry
+  written by hand with no `HANDOFF_AGENT` now resolves to the Cursor row from either handshake.
+- The session identity of an editor-hosted session (`src/adapters/editor.ts`). A server whose
+  chain shows that an editor of the VS Code family started it — `VSCODE_PID` names one of its
+  ancestors, and every process in between runs the editor's own executable — sends
+  `session_identity: "ancestor_chain:editor"` in the `capability_row` of `hello`, with the
+  editor in its chain. Every other session is keyed on its parent, as before. On Windows such a
+  server walks its chain with one PowerShell query, about 0.7 s once per session; the hook and
+  every other session still spawn nothing there.
+- The project folder of a session Cursor's editor started is the first workspace folder it
+  names in `WORKSPACE_FOLDER_PATHS`, not the home folder the editor starts its servers in.
+- Cursor canary scenarios in `test/canary/agents/cursor/`: the editor's session identity,
+  measured by launching an editor of the harness's own on a throw-away project, with no agent
+  request; what the server sees of a CLI session, images, and the hooks at the end of a turn;
+  E2E-8 in text mode; the degraded path; the default timeout. `pnpm canary -- --agent cursor`
+  runs them. Each CLI run spends one of the account's requests, so the set runs by hand and is
+  not in `canary.yml`.
+- Documentation: registering the server in Cursor (`docs/install-without-app.md`), its row in
+  the support-level table (`docs/index.md`), and what was measured against Cursor
+  (`docs/agent-facts.md`).
+
 ## [1.4.0] - 2026-09-11
 
 OpenCode is the third agent in the capability table, measured against the real OpenCode CLI
@@ -16,8 +55,8 @@ rather than assumed. It is supported at `base` level, like Codex: it shows the i
 tool result and honours a per-server timeout, but offers no end-of-turn hook to register. It
 is also the first agent whose default tool timeout is a measured value rather than a lower
 bound: sixty seconds, which the 50 s heartbeat stays ahead of. The public formats and the
-channel definition are unchanged since `0.1.0`. `1.2.0` and `1.3.0` are not released: they
-are kept for the Cursor and GitHub Copilot adapters, which come later.
+channel definition are unchanged since `0.1.0`. `1.2.0` and `1.3.0` are not released, and
+will not be: the adapters that follow take `1.5.0` onward.
 
 ### Added
 

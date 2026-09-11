@@ -170,9 +170,33 @@ describe('capabilities.json', () => {
     });
   });
 
+  it('states the cursor row as the T-069 measurements found it', () => {
+    // Cursor 3.20.10 and its CLI 2026.09.10-fd3934a, 2026-09-11, `test/canary/agents/cursor`
+    // and `docs/agent-facts.md`: the editor sends cursor-vscode and the CLI sends Cursor,
+    // neither reads a timeout from an MCP entry, the CLI cuts a call at the MCP SDK's 60 s with
+    // a cancellation, images reach the model, and no hook of Cursor reaches this server's
+    // hook. The row keys the editor surface on the chain; each session resolves its own.
+    expect(CAPABILITY_TABLE.find((row) => row.agent_id === 'cursor')).toEqual({
+      agent_id: 'cursor',
+      display_name: 'Cursor',
+      status: 'supported',
+      support: 'base',
+      match: { env: 'cursor', client_names: ['cursor-vscode', 'Cursor'] },
+      tool_timeout_ms_default: 60000,
+      per_server_timeout_field: null,
+      images_in_results: true,
+      stop_hook: false,
+      subagent_stop_hook: false,
+      session_identity: 'ancestor_chain:editor',
+      user_request_delivery: ['clipboard_focus'],
+      cancellation_notifications: true,
+      heartbeat_after_ms: null,
+    });
+  });
+
   it('keeps every planned adapter at base support with unmeasured fields null', () => {
     const planned = CAPABILITY_TABLE.filter((row) => row.status === 'planned');
-    expect(planned.map((row) => row.agent_id)).toEqual(['cursor', 'copilot']);
+    expect(planned.map((row) => row.agent_id)).toEqual(['copilot']);
     for (const row of planned) {
       expect(row.support).toBe('base');
       expect(row.tool_timeout_ms_default).toBeNull();
@@ -184,12 +208,14 @@ describe('capabilities.json', () => {
 
   it('records a client name only where the canary suite measured one (A-08)', () => {
     // `claude-code` is what Claude Code 2.1.263 sends in the `initialize` handshake (measured
-    // on 2026-09-08), `codex-mcp-client` what Codex 0.153.4 sends (2026-09-10) and `opencode`
-    // what OpenCode 1.18.29 sends (2026-09-11), all by `test/canary` and written down in
-    // `docs/agent-facts.md`. No other adapter has shipped, so no other list may hold a guess.
+    // on 2026-09-08), `codex-mcp-client` what Codex 0.153.4 sends (2026-09-10), `opencode`
+    // what OpenCode 1.18.29 sends (2026-09-11), and Cursor's editor sends `cursor-vscode` and
+    // its CLI `Cursor` (3.20.10 and 2026.09.10-fd3934a, 2026-09-11), all by `test/canary` and
+    // written down in `docs/agent-facts.md`. Copilot has not shipped, so its list holds no guess.
     const measured: Readonly<Record<string, readonly string[]>> = {
       'claude-code': ['claude-code'],
       codex: ['codex-mcp-client'],
+      cursor: ['cursor-vscode', 'Cursor'],
       opencode: ['opencode'],
     };
     for (const row of CAPABILITY_TABLE) {
@@ -203,6 +229,8 @@ describe('capabilities.json', () => {
     expect(resolveRow({ clientName: 'claude-code' }).agent_id).toBe('claude-code');
     expect(resolveRow({ clientName: 'codex-mcp-client' }).agent_id).toBe('codex');
     expect(resolveRow({ clientName: 'opencode' }).agent_id).toBe('opencode');
+    expect(resolveRow({ clientName: 'cursor-vscode' }).agent_id).toBe('cursor');
+    expect(resolveRow({ clientName: 'Cursor' }).agent_id).toBe('cursor');
   });
 
   it('keys the editor-hosted agents on the ancestor chain (ADPT-02, R-12)', () => {
@@ -293,6 +321,13 @@ describe('the resolved row is the object hello carries', () => {
       const hello = capabilityRowForHello(resolved, 1_800_000);
       expect(validateHelloRow(hello), explain(validateHelloRow.errors)).toBe(true);
     }
+  });
+
+  it('validates with the session identity an editor-hosted session adds to it (T-069)', () => {
+    const resolved = resolveCapabilityRow({ agent: 'cursor' });
+    const hello = capabilityRowForHello(resolved, 60_000, 'ancestor_chain:editor');
+    expect(validateHelloRow(hello), explain(validateHelloRow.errors)).toBe(true);
+    expect(hello.session_identity).toBe('ancestor_chain:editor');
   });
 
   it('validates with a null timeout, the case where the heartbeat falls back to 50 s', () => {

@@ -7,8 +7,11 @@
 export {
   ANCESTOR_TIMEOUT_MS,
   MAX_ANCESTOR_DEPTH,
+  POWERSHELL_ARGS,
+  POWERSHELL_COMMAND,
   PS_ARGS,
   PS_COMMAND,
+  WINDOWS_ANCESTOR_TIMEOUT_MS,
   ancestorChain,
   parseProcStatus,
   parseProcessTable,

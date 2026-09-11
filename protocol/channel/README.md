@@ -169,12 +169,21 @@ Details worth knowing before writing a codec:
 - **`identity`** carries `pid`, `ppid`, `ancestors[]`, `cwd`, and `project_dir` for a server.
   A hook sends no `project_dir`. `ancestors` is best effort: on macOS the peer walks its own
   chain, on Windows it sends an empty list, because spawning PowerShell would cost more than
-  the hook's entire budget. The app resolves the full chain itself from its native process
-  table and uses the union, so nothing is lost.
+  the hook's entire budget. The one exception is a server an editor may have started
+  (`VSCODE_PID` in its environment), which walks its chain on Windows too, once, with one
+  PowerShell query: its session identity is read from the names in that chain. The app
+  resolves the full chain itself from its native process table and uses the union, so
+  nothing is lost. For a server the editor started, `project_dir` is the editor's workspace
+  folder (`WORKSPACE_FOLDER_PATHS`), not its working directory, which Cursor's editor sets to
+  the user's home folder.
 - **`capability_row`** is the row the server already resolved for this session. The app
   adapts its UI to it — hiding "Send image" when `images_in_results` is false — and owns no
   agent facts of its own. The five required fields are the ones the design's example sends;
-  the optional ones are the remaining columns of the capability table.
+  the optional ones are the remaining columns of the capability table. `session_identity` is
+  the one optional field that is resolved per session rather than per agent, and it travels
+  only as `ancestor_chain:editor`, for a session the editor itself started: the app keys such
+  a session on the editor in its chain and on its workspace folder, not on the server's
+  parent. A `capability_row` without it is keyed on the parent.
 - **`hook.agent_id` and `hook.agent_type`** are the agent's own `SubagentStop` fields, and
   have nothing to do with the capability table's `agent_id`. `transcript_path`, which the
   agent also writes on the hook's stdin, is deliberately not forwarded.

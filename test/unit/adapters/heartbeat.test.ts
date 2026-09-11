@@ -103,6 +103,10 @@ describe('heartbeat margin and floor', () => {
   it('falls back to 50 s for any agent whose timeout nothing states', () => {
     expect(heartbeatAfterMs(claude)).toBe(50_000);
     expect(heartbeatAfterMs(codex)).toBe(50_000);
+    expect(heartbeatAfterMs(resolveCapabilityRow({ agent: 'copilot' }))).toBe(50_000);
+  });
+
+  it("answers ten seconds before Cursor's 60 s cut, at the floor (T-069)", () => {
     expect(heartbeatAfterMs(resolveCapabilityRow({ agent: 'cursor' }))).toBe(50_000);
   });
 

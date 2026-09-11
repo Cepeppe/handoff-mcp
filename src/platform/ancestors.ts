@@ -9,9 +9,13 @@
  *
  * - **macOS**: one `ps -axo pid=,ppid=,comm=` spawn (≈ 20 ms), capped at 200 ms, parsed
  *   into a table and walked. One spawn, not one per generation.
- * - **Windows**: nothing is spawned. `Get-CimInstance` or WMI would cost hundreds of
- *   milliseconds against the hook's 1 800 ms budget, so only `pid` and `ppid` are sent and
- *   the app — which has a native process table (`sysinfo`) — completes the chain itself.
+ * - **Windows**: nothing is spawned, with one exception. `Get-CimInstance` or WMI would cost
+ *   hundreds of milliseconds against the hook's 1 800 ms budget, so the hook and every other
+ *   session send only `pid` and `ppid` and the app — which has a native process table
+ *   (`sysinfo`) — completes the chain itself. The exception is a server an editor may have
+ *   started (T-069, `windowsChain`): telling the editor's own processes from an agent's
+ *   needs the names in the chain, so that server pays one PowerShell process-table query,
+ *   measured at 0.6 to 0.8 s, once per session and never in the hook.
  * - **Linux**: `/proc/<pid>/status`, a few small reads. Linux is not a supported platform;
  *   this exists because it is nearly free and keeps the door open.
  *
@@ -168,6 +172,28 @@ function procChain(
   return ancestorChain(table, pid, maxDepth);
 }
 
+/**
+ * The cap on the one Windows walk of T-069. It was measured at 0.6 to 0.8 s on the
+ * development machine, most of it PowerShell starting; the cap leaves room for a busy
+ * machine, and what is not ready by then is not sent.
+ */
+export const WINDOWS_ANCESTOR_TIMEOUT_MS = 5_000;
+
+/**
+ * The Windows walk of T-069: one PowerShell spawn that lists every process in the three
+ * columns `ps` prints, so `parseProcessTable` and `ancestorChain` read it unchanged. One spawn
+ * and one query, not one per generation. The output encoding is set first so that a process
+ * name outside the console's code page arrives intact.
+ */
+export const POWERSHELL_COMMAND = 'powershell.exe';
+export const POWERSHELL_ARGS: readonly string[] = [
+  '-NoProfile',
+  '-NonInteractive',
+  '-Command',
+  '[Console]::OutputEncoding = [Text.Encoding]::UTF8; ' +
+    'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId) $($_.Name)" }',
+];
+
 export interface AncestorOptions {
   readonly platform?: NodeJS.Platform;
   readonly pid?: number;
@@ -176,6 +202,14 @@ export interface AncestorOptions {
   readonly maxDepth?: number;
   readonly run?: CommandRunner;
   readonly readFile?: (path: string) => string;
+  /**
+   * Walk the chain on Windows as well (T-069): the one PowerShell spawn above, for a server
+   * an editor may have started, whose session identity needs the names in its chain. Off by
+   * default, and the hook never sets it (DD-22).
+   */
+  readonly windowsChain?: boolean;
+  /** The cap on that walk, `WINDOWS_ANCESTOR_TIMEOUT_MS` unless a test says otherwise. */
+  readonly windowsTimeoutMs?: number;
 }
 
 /**
@@ -197,7 +231,20 @@ export async function resolveProcessIdentity(
     maxDepth = MAX_ANCESTOR_DEPTH,
     run = runCommand,
     readFile,
+    windowsChain = false,
+    windowsTimeoutMs = WINDOWS_ANCESTOR_TIMEOUT_MS,
   } = options;
+
+  if (platform === 'win32' && windowsChain) {
+    try {
+      const table = parseProcessTable(
+        await run(POWERSHELL_COMMAND, POWERSHELL_ARGS, windowsTimeoutMs),
+      );
+      return { pid, ppid, ancestors: ancestorChain(table, pid, maxDepth) };
+    } catch {
+      return { pid, ppid, ancestors: [] };
+    }
+  }
 
   if (platform === 'darwin') {
     try {

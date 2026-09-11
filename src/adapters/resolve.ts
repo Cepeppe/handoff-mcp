@@ -169,6 +169,12 @@ export function resolveCapabilityRow(
  * five fields the app needs to adapt its UI, plus the display name it shows in the tab.
  * The timeout travels already resolved — the app owns no agent facts (ADPT-03) — and is
  * `null` when nothing is known, which is exactly when the heartbeat falls back to 50 s.
+ *
+ * `session_identity` travels only when the session resolved to the editor key
+ * (`ancestor_chain:editor`, `src/adapters/editor.ts`, T-069). It is a fact about the session
+ * rather than about the agent — Cursor's editor and its CLI share one row — so it is the
+ * resolved value and never the row's. A `hello` without it is keyed on the parent, as every
+ * `hello` was before, so the app needs no version check to read it.
  */
 export interface HelloCapabilityRow {
   readonly agent_id: string;
@@ -177,11 +183,13 @@ export interface HelloCapabilityRow {
   readonly images_in_results: boolean;
   readonly stop_hook: boolean;
   readonly tool_timeout_ms: number | null;
+  readonly session_identity?: string;
 }
 
 export function capabilityRowForHello(
   row: ResolvedCapabilityRow,
   toolTimeoutMs: number | null,
+  sessionIdentity?: string,
 ): HelloCapabilityRow {
   return {
     agent_id: row.agent_id,
@@ -190,5 +198,6 @@ export function capabilityRowForHello(
     images_in_results: row.images_in_results,
     stop_hook: row.stop_hook,
     tool_timeout_ms: toolTimeoutMs,
+    ...(sessionIdentity === undefined ? {} : { session_identity: sessionIdentity }),
   };
 }

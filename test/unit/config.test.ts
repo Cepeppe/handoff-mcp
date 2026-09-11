@@ -6,13 +6,14 @@
  * have `HANDOFF_HOME` set and on a runner that does not.
  */
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import {
   ENV_VAR_NAMES,
   envNamesPresent,
+  firstWorkspaceFolder,
   homeDir,
   homeOverride,
   readConfig,
@@ -22,12 +23,16 @@ import {
 
 const CWD = join('C', 'dev', 'shop');
 
+/** Absolute on whichever platform runs the suite: `C:\work\…` on Windows, `/work/…` elsewhere. */
+const SHOP = resolve('/work', 'shop');
+const BLOG = resolve('/work', 'blog');
+
 function config(env: EnvRecord) {
   return readConfig(env, CWD);
 }
 
 describe('the declared variables', () => {
-  it('are the six of §5.3 in that order, the canary switch, then the two Windows names the pipe is built from', () => {
+  it('are the six of §5.3 in that order, the canary switch, the two an editor sets, then the two Windows names the pipe is built from', () => {
     expect(ENV_VAR_NAMES).toEqual([
       'HANDOFF_AGENT',
       'HANDOFF_TOOL_TIMEOUT_MS',
@@ -36,6 +41,8 @@ describe('the declared variables', () => {
       'CLAUDE_PROJECT_DIR',
       'HANDOFF_MCP_LOG',
       'HANDOFF_CANARY',
+      'WORKSPACE_FOLDER_PATHS',
+      'VSCODE_PID',
       'USERDOMAIN',
       'USERNAME',
     ]);
@@ -83,6 +90,51 @@ describe('the project folder (A-24)', () => {
 
   it('falls back to the working directory, which is what SRV-18 keys on', () => {
     expect(config({ CLAUDE_PROJECT_DIR: '' }).projectDir).toBe(CWD);
+  });
+
+  it('is the first folder of WORKSPACE_FOLDER_PATHS, which an editor starts its servers with (T-069)', () => {
+    expect(config({ WORKSPACE_FOLDER_PATHS: SHOP }).projectDir).toBe(SHOP);
+    expect(config({ WORKSPACE_FOLDER_PATHS: `${SHOP},${BLOG}` }).projectDir).toBe(SHOP);
+  });
+
+  it('keeps a folder whose path has a comma in it whole', () => {
+    const odd = resolve('/work', 'shop, old');
+    expect(config({ WORKSPACE_FOLDER_PATHS: `${odd},${BLOG}` }).projectDir).toBe(odd);
+  });
+
+  it('lets CLAUDE_PROJECT_DIR outrank it, and falls back to the working directory past both', () => {
+    expect(config({ CLAUDE_PROJECT_DIR: BLOG, WORKSPACE_FOLDER_PATHS: SHOP }).projectDir).toBe(
+      BLOG,
+    );
+    expect(config({ WORKSPACE_FOLDER_PATHS: '' }).projectDir).toBe(CWD);
+    expect(config({ WORKSPACE_FOLDER_PATHS: 'relative/shop' }).projectDir).toBe(CWD);
+  });
+
+  it('reads nothing from a value that names no absolute folder', () => {
+    expect(firstWorkspaceFolder(undefined)).toBeUndefined();
+    expect(firstWorkspaceFolder(',')).toBeUndefined();
+    expect(firstWorkspaceFolder(`,${SHOP}`)).toBe(SHOP);
+  });
+});
+
+describe('the editor pointer (T-069)', () => {
+  it('reads VSCODE_PID as the process id it is', () => {
+    expect(config({ VSCODE_PID: '41452' }).editorPid).toBe(41_452);
+    expect(config({ VSCODE_PID: ' 41452 ' }).editorPid).toBe(41_452);
+  });
+
+  it('is unset when the variable is, and reports nothing then', () => {
+    const cfg = config({});
+    expect(cfg.editorPid).toBeUndefined();
+    expect(cfg.ignored).toEqual([]);
+  });
+
+  it('ignores a value that is not a positive whole number, and says so', () => {
+    for (const value of ['0', '-3', '12a', '1.5', '99999999999999999999']) {
+      const cfg = config({ VSCODE_PID: value });
+      expect(cfg.editorPid, value).toBeUndefined();
+      expect(cfg.ignored, value).toEqual(['VSCODE_PID']);
+    }
   });
 });
 

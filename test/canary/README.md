@@ -6,9 +6,10 @@ want the answers rather than the machinery.
 
 A canary is not a gate (TECHNICAL-DESIGN §11.1, DD-34). Everything that can be tested
 without a language model is a merge gate and lives in `test/unit`, `test/contract` and
-`test/integration`. What lives here needs a real agent — Claude Code, Codex since T-066 and
-OpenCode since T-074 — real credentials and real money, so `vitest.config.ts` excludes this
-directory outright: `pnpm test` never touches it and `pnpm canary` is the only way in.
+`test/integration`. What lives here needs a real agent — Claude Code, Codex since T-066,
+OpenCode since T-074 and Cursor since T-069 — real credentials and real money, so
+`vitest.config.ts` excludes this directory outright: `pnpm test` never touches it and
+`pnpm canary` is the only way in.
 
 ```
 pnpm build && pnpm canary            # every scenario of every agent
@@ -32,6 +33,13 @@ pnpm canary -- observe               # one of them
    user's global configuration never loads, turns project configuration and Claude Code's
    files off, and drops every `OPENCODE_*` variable of the parent; the runner then deletes the
    session the run left in OpenCode's history. `test/unit/canary/opencode.test.ts` pins them.
+   The Cursor Agent CLI has no switch of either kind either, so `agents/cursor/workspace.ts`
+   declares our server in the run's own project, allows its tools with one permission rule,
+   `Mcp(handoff:*)`, and never `--force`; the runner deletes what each run leaves under
+   `~/.cursor/`. What it cannot do is leave a `~/.cursor/mcp.json` of the user's out, and none
+   exists on the machine the facts were measured on. Cursor's editor is launched with a
+   user-data folder and a home folder of its own, so the `~/.cursor/mcp.json` it reads is the
+   run's. `test/unit/canary/cursor.test.ts` pins them.
 2. **`CLAUDECODE` is cleared for the child, always.** Claude Code refuses to run nested
    inside another Claude Code session, and this harness is normally started from one.
 3. **`HANDOFF_HOME` is a temporary folder, always.** The probe writes there, the token file
@@ -39,25 +47,30 @@ pnpm canary -- observe               # one of them
 
 ## The parts
 
-| File                           | What it is                                                                                   |
-| ------------------------------ | -------------------------------------------------------------------------------------------- |
-| `workspace.ts`                 | Pure: the MCP configuration, the project settings, the child environment, the command line   |
-| `runner.ts`                    | One Claude Code run: build the throw-away project, spawn `claude`, collect the three sources |
-| `classify.ts`                  | Protocol failure or model behaviour, and the single retry §11.5 allows                       |
-| `scenarios/`                   | The Claude Code scenarios, one file per group of assumptions                                 |
-| `hooks/record-stop.mjs`        | The recording Stop hook of A-05, A-06 and A-11                                               |
-| `agents/codex/workspace.ts`    | Pure: the `codex exec` command line, the `-c` overrides that declare our server, the env     |
-| `agents/codex/runner.ts`       | One Codex run: spawn `codex exec --json`, map its events onto the same `CanaryRun`           |
-| `agents/codex/app.ts`          | `test/fake-app`, bundled on the fly, for the scenario that needs an overlay listening        |
-| `agents/codex/*.ts`            | The Codex scenarios, and the checks they share (`scenario.ts`)                               |
-| `agents/opencode/workspace.ts` | Pure: the `opencode run` command line, the inline configuration, the isolated environment    |
-| `agents/opencode/runner.ts`    | One OpenCode run: spawn `opencode run --format json`, map its events, delete the session     |
-| `agents/opencode/*.ts`         | The OpenCode scenarios; those that read nothing agent-specific reuse the Codex checks        |
-| `cli.ts`                       | Pure: the `--agent` / `--list` command line                                                  |
-| `main.ts`                      | `pnpm canary`: run, classify, retry once, report, write `results/last-run.json`              |
-| `last-claude-version`          | The Claude Code version the recorded facts were measured against; `canary.yml` diffs it      |
-| `last-codex-version`           | The same for Codex                                                                           |
-| `last-opencode-version`        | The same for OpenCode                                                                        |
+| File                             | What it is                                                                                   |
+| -------------------------------- | -------------------------------------------------------------------------------------------- |
+| `workspace.ts`                   | Pure: the MCP configuration, the project settings, the child environment, the command line   |
+| `runner.ts`                      | One Claude Code run: build the throw-away project, spawn `claude`, collect the three sources |
+| `classify.ts`                    | Protocol failure or model behaviour, and the single retry §11.5 allows                       |
+| `scenarios/`                     | The Claude Code scenarios, one file per group of assumptions                                 |
+| `hooks/record-stop.mjs`          | The recording Stop hook of A-05, A-06 and A-11                                               |
+| `agents/codex/workspace.ts`      | Pure: the `codex exec` command line, the `-c` overrides that declare our server, the env     |
+| `agents/codex/runner.ts`         | One Codex run: spawn `codex exec --json`, map its events onto the same `CanaryRun`           |
+| `agents/codex/app.ts`            | `test/fake-app`, bundled on the fly, for the scenario that needs an overlay listening        |
+| `agents/codex/*.ts`              | The Codex scenarios, and the checks they share (`scenario.ts`)                               |
+| `agents/opencode/workspace.ts`   | Pure: the `opencode run` command line, the inline configuration, the isolated environment    |
+| `agents/opencode/runner.ts`      | One OpenCode run: spawn `opencode run --format json`, map its events, delete the session     |
+| `agents/opencode/*.ts`           | The OpenCode scenarios; those that read nothing agent-specific reuse the Codex checks        |
+| `agents/cursor/workspace.ts`     | Pure: the project's `mcp.json`, `cli.json` and hooks, the `agent -p` command line, the env   |
+| `agents/cursor/runner.ts`        | One Cursor CLI run: spawn `agent -p` past its shim, map its stream-json, delete its state    |
+| `agents/cursor/editor-runner.ts` | One launch of Cursor's editor on a throw-away project, until the server registers            |
+| `agents/cursor/record-hook.mjs`  | The recording hook, declared as Cursor's `stop` and as Claude Code's `Stop`; never blocks    |
+| `agents/cursor/*.ts`             | The Cursor scenarios, a `surface` each: the editor's, or the CLI's                           |
+| `cli.ts`                         | Pure: the `--agent` / `--list` command line                                                  |
+| `main.ts`                        | `pnpm canary`: run, classify, retry once, report, write `results/last-run.json`              |
+| `last-claude-version`            | The Claude Code version the recorded facts were measured against; `canary.yml` diffs it      |
+| `last-codex-version`             | The same for Codex                                                                           |
+| `last-opencode-version`          | The same for OpenCode                                                                        |
 
 The deterministic half — the configuration shapes, the environment, the command lines, the
 event mapping, the classifier — is unit-tested in `test/unit/canary/`, and that is
@@ -69,26 +82,31 @@ nothing to do with the agent, and the report would look like an agent regression
 A scenario reads a run from three sides, and which side an assertion reads decides whether
 it is a protocol failure or a model one:
 
-- **the transcript** — the messages the agent printed: `stream-json` for Claude Code, the
-  `--json` events for Codex, the `--format json` events for OpenCode, all mapped onto one
-  shape. This is what the model did, and an assertion on it is a model assertion.
+- **the transcript** — the messages the agent printed: `stream-json` for Claude Code and for
+  Cursor's CLI, the `--json` events for Codex, the `--format json` events for OpenCode, all
+  mapped onto one shape. This is what the model did, and an assertion on it is a model
+  assertion.
 - **the observations** — `$HANDOFF_HOME/canary/observations.jsonl`, written by the canary
   probe **inside the server** (`src/mcp/canary.ts`, active only under `HANDOFF_CANARY=1`).
   This is what the protocol did, and it does not depend on the model having behaved.
-- **the hook records** — `$HANDOFF_HOME/canary/hook.jsonl`, written by `record-stop.mjs`.
-  Codex runs no hook under `codex exec` and OpenCode has none to declare, so their runs have
-  none.
+- **the hook records** — `$HANDOFF_HOME/canary/hook.jsonl`, written by `record-stop.mjs`, or,
+  for Cursor, the run's `hooks.jsonl`, written by `agents/cursor/record-hook.mjs`. Codex runs
+  no hook under `codex exec`, OpenCode has none to declare, and under `agent -p` Cursor ran
+  neither of the two it was given, so those runs have none.
 
-The degraded-path scenarios of Codex and OpenCode add a fourth: what the scripted overlay
-received, which is where the heartbeat's `handoff.detach_call` and every resume show up.
+The degraded-path scenarios of Codex, OpenCode and Cursor add a fourth: what the scripted
+overlay received, which is where the heartbeat's `handoff.detach_call` and every resume show
+up. Cursor's editor scenario reads only that: the `hello` the server registered with.
 
 ## Writing a scenario
 
 Give it an id, the assumption ids it covers, the run options, a `check` that returns
 assertions and a `facts` that returns what was _measured_ — the two are not the same, and
 half of Appendix B is about the number rather than about the tick. Then add it to
-`scenarios/index.ts`, `agents/codex/index.ts` or `agents/opencode/index.ts`, cheapest first.
-A Codex scenario's id starts with `codex-`, an OpenCode one's with `opencode-`.
+`scenarios/index.ts`, `agents/codex/index.ts`, `agents/opencode/index.ts` or
+`agents/cursor/index.ts`, cheapest first. A Codex scenario's id starts with `codex-`, an
+OpenCode one's with `opencode-`, a Cursor one's with `cursor-`, and a Cursor scenario also
+says which `surface` it runs: `cli` spends one of the account's requests, `editor` none.
 
 Five things learnt the hard way and worth not re-learning:
 

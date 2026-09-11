@@ -22,9 +22,10 @@ pnpm canary -- observe a03-timeout-honoured    # only these
 pnpm canary -- --list                          # what exists, without spending anything
 ```
 
-`claude`, `codex` and `opencode` must be on `PATH` and logged in for their scenarios. Each run
-builds a throw-away project under the system temporary directory with its own `HANDOFF_HOME`,
-so nothing touches `~/.handoff/`, and the report is written to
+`claude`, `codex`, `opencode` and Cursor's `agent` must be on `PATH` and logged in for their
+scenarios, and the Cursor editor scenario needs Cursor installed where it installs itself.
+Each run builds a throw-away project under the system temporary directory with its own
+`HANDOFF_HOME`, so nothing touches `~/.handoff/`, and the report is written to
 `test/canary/results/last-run.json` (git-ignored).
 
 | Variable                        | Effect                                                                                                                                                               |
@@ -32,8 +33,11 @@ so nothing touches `~/.handoff/`, and the report is written to
 | `HANDOFF_CANARY_MODEL`          | The Claude Code model to run against. Default `sonnet`, so a run stays cheap.                                                                                        |
 | `HANDOFF_CANARY_CODEX_MODEL`    | The Codex model to run against. Default `gpt-5.6-luna`, the one Codex's own list calls fast and affordable.                                                          |
 | `HANDOFF_CANARY_OPENCODE_MODEL` | The OpenCode model to run against, as `provider/model`. Default `openrouter/thinkingmachines/inkling-small:free`: free, so a run costs nothing, and it reads images. |
+| `HANDOFF_CANARY_CURSOR_MODEL`   | The model Cursor's CLI runs on. Default `auto`, Cursor's own choice and the one its Free plan offers.                                                                |
 | `HANDOFF_CANARY_CODEX`          | The `codex` program to start, when it is not the one on `PATH`.                                                                                                      |
 | `HANDOFF_CANARY_OPENCODE`       | The `opencode` program to start, when it is not the one on `PATH`.                                                                                                   |
+| `HANDOFF_CANARY_CURSOR`         | Cursor's `agent` program to start, when it is not the one on `PATH`.                                                                                                 |
+| `HANDOFF_CANARY_CURSOR_EDITOR`  | Cursor's editor executable, when it is not where Cursor installs itself.                                                                                             |
 | `HANDOFF_CANARY_KEEP=1`         | Keeps each run's temporary project, for reading a failure by hand.                                                                                                   |
 | `HANDOFF_CANARY_SERVER`         | The bundle the MCP entry runs, instead of `dist/handoff-mcp.cjs` of this checkout. A release points it at the tarball it is about to publish.                        |
 
@@ -45,7 +49,13 @@ off, which are how a Codex session reaches connected accounts. OpenCode has neit
 our server is declared inline in `OPENCODE_CONFIG_CONTENT`, `XDG_CONFIG_HOME` points at an
 empty folder of the run so that the user's global configuration never loads, project
 configuration and Claude Code's files are switched off, and the session each run leaves in
-OpenCode's history is deleted afterwards. And `CLAUDECODE` is always cleared for the child,
+OpenCode's history is deleted afterwards. Cursor's CLI has neither flag either: our server is
+declared in the run's own project, whose `.cursor/cli.json` allows its tools with the one rule
+`Mcp(handoff:*)` and never `--force`, and what each run leaves under `~/.cursor/` is deleted
+afterwards; a `~/.cursor/mcp.json` of the user's would still load, and none exists on the
+machine these facts were measured on. Cursor's editor is launched with a user-data folder and
+a home folder of the run's own, so the `~/.cursor/mcp.json` it reads is the run's. And
+`CLAUDECODE` is always cleared for the child,
 because Claude Code refuses to run nested inside another Claude Code session and the harness
 is normally started from one.
 
@@ -342,31 +352,165 @@ rate-limited upstream" (measured once, on another free model). The run then ends
 or name another model with `HANDOFF_CANARY_OPENCODE_MODEL`. A paid model works the same way,
 as long as the account can pay for the 32 000 output tokens OpenCode asks every request for.
 
+## Cursor
+
+**Cursor 3.20.10 and its Agent CLI 2026.09.10-fd3934a · Windows 11 (win32-x64) · model `auto`
+· 2026-09-11.** All five scenarios passed on the first attempt: the editor's session identity
+in 13 s with no agent request, and the four CLI runs in about three minutes, which spent four
+of the account's requests on the Free plan. Cursor reports tokens and no price; the longest
+run, the degraded path, used about 17 600 input and 670 output tokens.
+
+Cursor has two surfaces, and they are measured two ways. The **editor** starts the servers of
+`~/.cursor/mcp.json` as a window opens, before any chat, so its side of a session is measured
+by launching an editor of the harness's own — a fresh user-data folder, and a home folder of
+the run's so that its `~/.cursor/mcp.json` is the run's — and reading the registration. Its
+chat cannot be driven from a script, so nothing about a tool call is measured through it. The
+**CLI**, `agent -p`, runs a whole turn and is measured like Codex and OpenCode.
+
+### Identity and configuration
+
+| Fact                                  | Editor                                                                                                                                                                        | CLI                                                                                                                                                                                                                                  |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Configuration                         | `~/.cursor/mcp.json`, or `.cursor/mcp.json` in a project, one entry per server under `mcpServers`                                                                             | The same two files                                                                                                                                                                                                                   |
+| Non-interactive command               | —                                                                                                                                                                             | `agent -p --output-format stream-json …`: one JSON event per line, the prompt last                                                                                                                                                   |
+| `clientInfo.name` (A-08)              | `cursor-vscode`                                                                                                                                                               | `Cursor`                                                                                                                                                                                                                             |
+| `clientInfo.version`                  | `1.0.0`                                                                                                                                                                       | `1.0.0`                                                                                                                                                                                                                              |
+| What starts the server                | The extension host, a `Cursor.exe` whose parent is the editor's main `Cursor.exe`, as the window opens                                                                        | The CLI's own `node.exe`                                                                                                                                                                                                             |
+| Server processes                      | One per window                                                                                                                                                                | One per `-p` run; `agent mcp list-tools` starts it twice                                                                                                                                                                             |
+| The server's working directory (A-24) | The user's home folder, unless the entry sets `cwd`; the workspace is in `WORKSPACE_FOLDER_PATHS`, the workspace folders joined by commas                                     | The folder the CLI works in                                                                                                                                                                                                          |
+| `env` of the MCP entry (A-02, A-23)   | Arrives whole, `HANDOFF_PROBE_TOKEN` beside `HANDOFF_PROBE`                                                                                                                   | Arrives whole, `HANDOFF_PROBE_TOKEN` beside `HANDOFF_PROBE`                                                                                                                                                                          |
+| The rest of the server's environment  | The extension host's own, whole: `VSCODE_PID` (the editor's main process), `VSCODE_CWD`, `VSCODE_IPC_HOOK` and the others, plus `WORKSPACE_FOLDER_PATHS` and `npm_config_yes` | A short list of its own: `APPDATA`, `HOMEDRIVE`, `HOMEPATH`, `LOCALAPPDATA`, `LOGONSERVER`, `PATH`, `PROCESSOR_ARCHITECTURE`, `PROGRAMFILES`, `SYSTEMDRIVE`, `SYSTEMROOT`, `TEMP`, `USERDOMAIN`, `USERNAME`, `USERPROFILE`, `WINDIR` |
+| `USERDOMAIN` and `USERNAME`           | Present, so the server finds the app's pipe                                                                                                                                   | Present                                                                                                                                                                                                                              |
+| Approval before the server loads      | None, for a server of the user file                                                                                                                                           | A server of a project file is refused until approved: `agent mcp enable`, or `--approve-mcps` for one run                                                                                                                            |
+| Approval before a call                | Not measured                                                                                                                                                                  | Print mode refuses a tool that is not annotated read-only unless a permission rule allows it; `Mcp(handoff:*)` in the project's `.cursor/cli.json` is the narrowest rule, and it was enough                                          |
+| How the model reaches the tools       | Not measured                                                                                                                                                                  | Through Cursor's own `getMcpToolsToolCall` first, then by name, as `handoff-<tool>`                                                                                                                                                  |
+| Images in tool results (A-07)         | Not measured                                                                                                                                                                  | Reach the model: the colour of `image_probe` was named                                                                                                                                                                               |
+
+`clientInfo.name` is in `src/adapters/capabilities.json` as
+`match.client_names: ["cursor-vscode", "Cursor"]`, so an entry written by hand without
+`HANDOFF_AGENT` resolves to the Cursor row from either surface.
+
+### The session identity of an editor (R-12)
+
+What makes the editor the hard case of the design's risk R-12, measured plainly: the server's
+parent is not an agent but the editor's extension host, and one server serves every chat of a
+window. Two windows are two extension hosts, and nothing ties a hook or a request to the right
+one except the editor in the chain and the workspace folder.
+
+- **A server the editor started says so now.** `src/adapters/editor.ts` finds the process
+  `VSCODE_PID` names among its ancestors, with nothing in between but the editor's own
+  executable, and the server sends `session_identity: "ancestor_chain:editor"` in the
+  `capability_row` of `hello`, the chain with the editor in it, and the first workspace folder
+  of `WORKSPACE_FOLDER_PATHS` as `project_dir`. Measured by `cursor-editor-identity`: the
+  editor the harness launched was the second process of the chain, after the extension host,
+  and `project_dir` was the workspace while the working directory was the home folder.
+- **On Windows that takes the names in the chain**, so such a server walks it with one
+  PowerShell query, 0.6 to 0.8 s measured, once, before it registers. Every other server and
+  the hook still spawn nothing there.
+- **A session the CLI starts keeps the parent key.** Its parent is the CLI, no `VSCODE_PID`
+  reaches it, and its `hello` carries no `session_identity` (measured by the degraded-path
+  run). So does a server started through a launcher such as `npx`, which sits between it and
+  the editor.
+
+### Tool timeouts and cancellation (A-04, A-09)
+
+Cursor reads no timeout from an MCP entry: neither the editor's MCP client nor the CLI's has a
+field for one (read from the 3.20.10 bundle and from the CLI's code). What limits a call:
+
+| Surface | Limit                                                                                                  | How it is known                                                                                                                             |
+| ------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI     | The MCP SDK's 60 000 ms request timeout, since the CLI passes none; the SDK cancels the call           | Measured: a 90 s `sleep_ms` ended `aborted` by an MCP cancellation after 59 999 ms, and the agent saw "MCP error -32001: Request timed out" |
+| Editor  | An idle timeout of 120 000 ms that restarts at every progress notification, and an hour in all at most | Read from the bundle, not measured                                                                                                          |
+
+`tool_timeout_ms_default` is therefore `60000`, the shorter of the two, and
+`cancellation_notifications` is `true`. The heartbeat it gives is the 50 s floor, ten seconds
+before the CLI's cut. `per_server_timeout_field` is `null`, and nothing an installer writes can
+raise the limit — which also means an installer must not write `HANDOFF_TOOL_TIMEOUT_MS` for
+Cursor: a larger value there would move the heartbeat past the cut.
+
+### The end-of-turn hook
+
+Cursor has hooks of its own — `~/.cursor/hooks.json` and a project's `.cursor/hooks.json`,
+with `stop` and `subagentStop` among twenty-one events — and it also loads Claude Code's `Stop`
+and `SubagentStop` hooks from `~/.claude/settings.json` and a project's `.claude/` files as its
+own. None of them reaches this server's hook:
+
+- **Under `agent -p` none ran.** The observation run declared a `stop` hook in the project's
+  `.cursor/hooks.json` and a `Stop` hook in its `.claude/settings.json`, and neither was
+  invoked.
+- **The payload is not Claude Code's.** A Cursor `stop` hook is handed `conversation_id`,
+  `generation_id`, `model`, `status`, `loop_count`, the token counts, `session_id`,
+  `hook_event_name`, `cursor_version`, `workspace_roots`, `user_email` and `transcript_path`,
+  and no `stop_hook_active` (read from the CLI's code). `handoff-mcp hook stop` requires it, so
+  it answers such a payload — with the event named `stop` or `Stop` — neutrally and silently,
+  before it reads the token or opens anything: measured with the built bundle, exit 0, nothing
+  on stdout, `hook_input_unusable` in its debug log.
+- **So the Claude Code hook costs nothing in Cursor.** On a machine where it is installed,
+  Cursor may run it with Cursor's payload; it stays silent, never blocks a Cursor turn and
+  cannot fire twice with anything.
+- And Cursor's answer is not a block: a `stop` hook may answer `followup_message`, which
+  Cursor submits as the next user message, at most five times by default.
+
+So `stop_hook` is `false`, the level is `base`, and a `deferred` or `parked` outcome tells a
+Cursor agent that nothing will remind it.
+
+### The degraded path (FM-03, FM-04)
+
+The flow of Codex and OpenCode, against the real CLI with `test/fake-app` listening:
+
+1. The first `handoff_to_user` call was answered `in_progress` after **50 013 ms**, the
+   heartbeat, ten seconds before the CLI would have cut it.
+2. The CLI resumed, as that instruction says. The overlay reported that the user had deferred
+   the step, and the instruction the CLI received was the no-hook variant.
+3. The CLI resumed again before finishing, by itself, and received the final
+   `confirmed_by_user`.
+
+Three results, two resumes, and no channel line refused by the schema in either direction.
+
+### Text mode (E2E-8)
+
+With no overlay listening, `handoff_to_user` answered `status: "text_mode"` with the spec
+rendered as the block of §5.9, and the CLI presented the steps in its reply.
+
+### What a run leaves behind
+
+`agent -p` has no ephemeral mode: every run leaves `~/.cursor/projects/<slug of the
+workspace>/` and a conversation under `~/.cursor/chats/`. The runner deletes the entries a run
+added to those two folders and nothing else. The editor scenario's own Cursor lives in the
+run's temporary folder and is closed, with everything it started, when the server has
+registered.
+
 ## The scenarios
 
-| Scenario                      | Covers                                         | What it does                                                          |
-| ----------------------------- | ---------------------------------------------- | --------------------------------------------------------------------- |
-| `observe`                     | A-01, A-02, A-05, A-06, A-08, A-11, A-23, A-24 | One `handoff_runbooks` call with the recording Stop hook installed    |
-| `e2e-08-text-mode`            | E2E-8                                          | One `handoff_to_user` call with no overlay listening                  |
-| `a03-timeout-honoured`        | A-03, A-09                                     | `sleep_ms` past `MCP_TOOL_TIMEOUT`                                    |
-| `a04-per-server-timeout`      | A-04, A-09                                     | `sleep_ms` past the per-server `timeout` field                        |
-| `a03-timeout-default`         | A-03                                           | `sleep_ms` for 70 s with nothing configured                           |
-| `codex-observe`               | A-01, A-02, A-08, A-23, A-24, SRV-19           | One `handoff_runbooks` call, read from the server's side              |
-| `codex-image`                 | A-07                                           | One `image_probe` call; the model names the colour                    |
-| `codex-e2e-08-text-mode`      | E2E-8                                          | One `handoff_to_user` call with no overlay listening                  |
-| `codex-per-server-timeout`    | A-04, A-09                                     | `sleep_ms` past `tool_timeout_sec = 20`                               |
-| `codex-degraded-path`         | FM-03, FM-04, SRV-20                           | Heartbeat, resume, deferral and resume, against `fake-app`            |
-| `codex-default-timeout`       | FM-04                                          | `sleep_ms` for 120 s with nothing configured                          |
-| `opencode-observe`            | A-01, A-02, A-08, A-23, A-24, SRV-19           | One `handoff_runbooks` call, read from the server's side              |
-| `opencode-image`              | A-07                                           | One `image_probe` call; the model names the colour                    |
-| `opencode-e2e-08-text-mode`   | E2E-8                                          | One `handoff_to_user` call with no overlay listening                  |
-| `opencode-per-server-timeout` | A-04, A-09                                     | `sleep_ms` past `"timeout": 20000`                                    |
-| `opencode-degraded-path`      | FM-03, FM-04, SRV-20                           | Heartbeat, resume, deferral and resume, against `fake-app`            |
-| `opencode-default-timeout`    | FM-04, A-09                                    | `sleep_ms` for 120 s with nothing configured; cut at the 60 s default |
+| Scenario                      | Covers                                           | What it does                                                          |
+| ----------------------------- | ------------------------------------------------ | --------------------------------------------------------------------- |
+| `observe`                     | A-01, A-02, A-05, A-06, A-08, A-11, A-23, A-24   | One `handoff_runbooks` call with the recording Stop hook installed    |
+| `e2e-08-text-mode`            | E2E-8                                            | One `handoff_to_user` call with no overlay listening                  |
+| `a03-timeout-honoured`        | A-03, A-09                                       | `sleep_ms` past `MCP_TOOL_TIMEOUT`                                    |
+| `a04-per-server-timeout`      | A-04, A-09                                       | `sleep_ms` past the per-server `timeout` field                        |
+| `a03-timeout-default`         | A-03                                             | `sleep_ms` for 70 s with nothing configured                           |
+| `codex-observe`               | A-01, A-02, A-08, A-23, A-24, SRV-19             | One `handoff_runbooks` call, read from the server's side              |
+| `codex-image`                 | A-07                                             | One `image_probe` call; the model names the colour                    |
+| `codex-e2e-08-text-mode`      | E2E-8                                            | One `handoff_to_user` call with no overlay listening                  |
+| `codex-per-server-timeout`    | A-04, A-09                                       | `sleep_ms` past `tool_timeout_sec = 20`                               |
+| `codex-degraded-path`         | FM-03, FM-04, SRV-20                             | Heartbeat, resume, deferral and resume, against `fake-app`            |
+| `codex-default-timeout`       | FM-04                                            | `sleep_ms` for 120 s with nothing configured                          |
+| `opencode-observe`            | A-01, A-02, A-08, A-23, A-24, SRV-19             | One `handoff_runbooks` call, read from the server's side              |
+| `opencode-image`              | A-07                                             | One `image_probe` call; the model names the colour                    |
+| `opencode-e2e-08-text-mode`   | E2E-8                                            | One `handoff_to_user` call with no overlay listening                  |
+| `opencode-per-server-timeout` | A-04, A-09                                       | `sleep_ms` past `"timeout": 20000`                                    |
+| `opencode-degraded-path`      | FM-03, FM-04, SRV-20                             | Heartbeat, resume, deferral and resume, against `fake-app`            |
+| `opencode-default-timeout`    | FM-04, A-09                                      | `sleep_ms` for 120 s with nothing configured; cut at the 60 s default |
+| `cursor-editor-identity`      | R-12, SRV-17, SRV-18, SRV-19, A-08               | Cursor's editor, launched on a throw-away project; no agent request   |
+| `cursor-observe`              | A-01, A-02, A-05..A-08, A-11, A-23, A-24, SRV-19 | One `handoff_runbooks` call, one `image_probe` call, the hooks        |
+| `cursor-e2e-08-text-mode`     | E2E-8                                            | One `handoff_to_user` call with no overlay listening                  |
+| `cursor-degraded-path`        | FM-03, FM-04, SRV-20, R-12                       | Heartbeat, resume, deferral and resume, against `fake-app`            |
+| `cursor-default-timeout`      | FM-04, A-04, A-09                                | `sleep_ms` for 90 s with nothing configured; cut at the 60 s default  |
 
-Not covered here, and why: **A-07** is measured for Codex and OpenCode through `image_probe`;
-the Claude Code scenarios do not run it, and for Claude Code it rests on E2E-3, which needs an
-overlay.
+Not covered here, and why: **A-07** is measured for Codex, OpenCode and Cursor's CLI through
+`image_probe`; the Claude Code scenarios do not run it, and for Claude Code it rests on E2E-3,
+which needs an overlay. Nothing about a tool call is measured through Cursor's editor, whose
+chat cannot be driven from a script.
 **A-10** (`/mcp reconnect`) is interactive and stays a manual check; **A-12..A-26** are about
 platforms, OCR, capture and packaging rather than about the agent.
 
@@ -385,12 +529,15 @@ Every assertion declares what it looked at, and that decides what happens when i
 
 ## When to re-run it
 
-After every Claude Code, Codex or OpenCode update, and before any release that changes how
-the server talks to an agent. The workflow `.github/workflows/canary.yml` does the same thing
-on a `workflow_dispatch`, comparing the npm dist-tags of `@anthropic-ai/claude-code`,
-`@openai/codex` and `opencode-ai` against `test/canary/last-claude-version`,
-`test/canary/last-codex-version` and `test/canary/last-opencode-version`; each agent's job
-skips gracefully when its API key is not configured, which is the current state.
+After every Claude Code, Codex, OpenCode or Cursor update, and before any release that changes
+how the server talks to an agent. The workflow `.github/workflows/canary.yml` does the same
+thing on a `workflow_dispatch` for the first three, comparing the npm dist-tags of
+`@anthropic-ai/claude-code`, `@openai/codex` and `opencode-ai` against
+`test/canary/last-claude-version`, `test/canary/last-codex-version` and
+`test/canary/last-opencode-version`; each agent's job skips gracefully when its API key is not
+configured, which is the current state. Cursor has no job and no version file: every run of
+its CLI spends one of the account's requests and the editor scenario opens a window, so
+`pnpm canary -- --agent cursor` is run by hand, after a Cursor update, and rarely.
 
 When a run's numbers differ from the tables above, update this page in the same commit as
 whatever the difference forced, and bump the version file of that agent.

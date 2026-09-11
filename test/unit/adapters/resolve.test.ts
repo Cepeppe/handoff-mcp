@@ -81,14 +81,29 @@ describe('null fields fall back to the unknown row', () => {
   const unknown = unknownRow();
 
   it('gives a planned adapter the base behaviour of the unknown row', () => {
+    const copilot = resolveCapabilityRow({ agent: 'copilot' });
+    expect(copilot.agent_id).toBe('copilot');
+    expect(copilot.images_in_results).toBe(unknown.images_in_results);
+    expect(copilot.stop_hook).toBe(unknown.stop_hook);
+    expect(copilot.subagent_stop_hook).toBe(unknown.subagent_stop_hook);
+    expect(copilot.user_request_delivery).toEqual(unknown.user_request_delivery);
+    expect(copilot.cancellation_notifications).toBe(unknown.cancellation_notifications);
+    expect(copilot.heartbeat_after_ms).toBe(50_000);
+  });
+
+  it('keeps every value the cursor row measured, its CLI 60 s default included (T-069)', () => {
     const cursor = resolveCapabilityRow({ agent: 'cursor' });
-    expect(cursor.agent_id).toBe('cursor');
-    expect(cursor.images_in_results).toBe(unknown.images_in_results);
-    expect(cursor.stop_hook).toBe(unknown.stop_hook);
-    expect(cursor.subagent_stop_hook).toBe(unknown.subagent_stop_hook);
-    expect(cursor.user_request_delivery).toEqual(unknown.user_request_delivery);
-    expect(cursor.cancellation_notifications).toBe(unknown.cancellation_notifications);
-    expect(cursor.heartbeat_after_ms).toBe(50_000);
+    expect(cursor.status).toBe('supported');
+    expect(cursor.support).toBe('base');
+    expect(cursor.stop_hook).toBe(false);
+    expect(cursor.subagent_stop_hook).toBe(false);
+    expect(cursor.user_request_delivery).toEqual(['clipboard_focus']);
+    expect(cursor.images_in_results).toBe(true);
+    expect(cursor.cancellation_notifications).toBe(true);
+    expect(cursor.per_server_timeout_field).toBeNull();
+    expect(cursor.tool_timeout_ms_default).toBe(60_000);
+    expect(cursor.session_identity).toBe('ancestor_chain:editor');
+    expect(cursor.heartbeat_after_ms).toBe(unknown.heartbeat_after_ms);
   });
 
   it('keeps every value the codex row measured, and inherits only the heartbeat (T-066)', () => {
@@ -138,7 +153,7 @@ describe('null fields fall back to the unknown row', () => {
   });
 
   it('leaves the two fields the unknown row cannot fill as null', () => {
-    const resolved = resolveCapabilityRow({ agent: 'cursor' });
+    const resolved = resolveCapabilityRow({ agent: 'copilot' });
     expect(resolved.tool_timeout_ms_default).toBeNull();
     expect(resolved.per_server_timeout_field).toBeNull();
   });
@@ -147,7 +162,7 @@ describe('null fields fall back to the unknown row', () => {
     const broken = CAPABILITY_TABLE.map((row) =>
       row.agent_id === 'unknown' ? { ...row, images_in_results: null } : row,
     );
-    expect(() => resolveCapabilityRow({ agent: 'cursor' }, broken)).toThrow(/images_in_results/u);
+    expect(() => resolveCapabilityRow({ agent: 'copilot' }, broken)).toThrow(/images_in_results/u);
   });
 
   it('refuses a table with no unknown row at all', () => {
@@ -173,5 +188,13 @@ describe('the hello projection', () => {
     const row = resolveCapabilityRow({ agent: 'codex' });
     expect(capabilityRowForHello(row, null).tool_timeout_ms).toBeNull();
     expect(capabilityRowForHello(row, 600_000).tool_timeout_ms).toBe(600_000);
+  });
+
+  it('carries the session identity only when the session resolved one, never the row (T-069)', () => {
+    const cursor = resolveCapabilityRow({ agent: 'cursor' });
+    expect(capabilityRowForHello(cursor, 60_000)).not.toHaveProperty('session_identity');
+    expect(capabilityRowForHello(cursor, 60_000, 'ancestor_chain:editor').session_identity).toBe(
+      'ancestor_chain:editor',
+    );
   });
 });

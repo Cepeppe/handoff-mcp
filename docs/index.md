@@ -86,12 +86,20 @@ which reads nothing else still behaves correctly. The rows that ship today:
 | ----------------------- | ------ | ---------------------- | ---------------- | ------------------------------ |
 | `claude-code`           | `full` | yes                    | yes              | `timeout`, in milliseconds     |
 | `codex`                 | `base` | yes                    | no               | `tool_timeout_sec`, in seconds |
+| `cursor`                | `base` | yes                    | no               | none                           |
 | `opencode`              | `base` | yes                    | no               | `timeout`, in milliseconds     |
 | `unknown` (any other)   | `base` | no                     | no               | —                              |
 
-`cursor` and `copilot` are in the table with `status: planned` and enter it as their adapters
-ship. Every value of a shipped row was measured against the real agent;
+`copilot` is in the table with `status: planned` and enters it as its adapter ships. Every
+value of a shipped row was measured against the real agent;
 [measured agent facts](agent-facts.md) says when, and against which version.
+
+One fact belongs to a session rather than to its agent: whether an editor started the server.
+A CLI agent starts it itself, and the overlay keys that session on the server's parent.
+Cursor's editor starts it from its own extension host, once per window, so the server tells
+the overlay to key that session on the editor and on its workspace folder instead; the
+[channel](channel.md) carries it as `session_identity`. Cursor's CLI shares the `cursor` row
+and is keyed on its parent like any other CLI agent.
 
 Remote agents (an agent running in the cloud rather than on your machine) find no socket and
 get [text mode](text-mode.md) with no extra code. That works, and it is not supported: there

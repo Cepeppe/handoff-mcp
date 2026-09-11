@@ -9,7 +9,7 @@
  */
 
 /** The agents the canary knows how to run. */
-export const CANARY_AGENTS = ['claude-code', 'codex', 'opencode'] as const;
+export const CANARY_AGENTS = ['claude-code', 'codex', 'opencode', 'cursor'] as const;
 
 export type CanaryAgent = (typeof CANARY_AGENTS)[number];
 
