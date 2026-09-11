@@ -174,8 +174,11 @@ Details worth knowing before writing a codec:
   PowerShell query: its session identity is read from the names in that chain. The app
   resolves the full chain itself from its native process table and uses the union, so
   nothing is lost. For a server the editor started, `project_dir` is the editor's workspace
-  folder (`WORKSPACE_FOLDER_PATHS`), not its working directory, which Cursor's editor sets to
-  the user's home folder.
+  folder, not its working directory, which Cursor's editor and VS Code both set to the user's
+  home folder: the first folder of `WORKSPACE_FOLDER_PATHS` where the editor sets it (Cursor),
+  else the first `file:` root the editor's MCP client lists (VS Code), which the server asks
+  for between the handshake and `hello`. A window with no folder open has neither, and its
+  `project_dir` is then the working directory.
 - **`capability_row`** is the row the server already resolved for this session. The app
   adapts its UI to it — hiding "Send image" when `images_in_results` is false — and owns no
   agent facts of its own. The five required fields are the ones the design's example sends;

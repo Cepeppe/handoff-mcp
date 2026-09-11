@@ -15,8 +15,9 @@ export {
   editorHost,
   isEditorExecutable,
   resolveSessionIdentity,
+  workspaceFromRoots,
 } from './editor';
-export type { EditorProcess, SessionIdentity, SessionIdentityKind } from './editor';
+export type { ClientRoot, EditorProcess, SessionIdentity, SessionIdentityKind } from './editor';
 export {
   HEARTBEAT_MARGIN_MS,
   UNKNOWN_CLIENT_HEARTBEAT_MS,

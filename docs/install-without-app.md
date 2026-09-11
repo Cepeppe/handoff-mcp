@@ -135,6 +135,60 @@ app's own executable — the server tells the overlay that the editor hosts the 
 agent's. This was measured with Cursor 3.20.10 and the CLI 2026.09.10-fd3934a on Windows; see
 [measured agent facts](agent-facts.md#cursor).
 
+## Registering it in GitHub Copilot
+
+GitHub Copilot has two surfaces with two files. **VS Code's chat** reads `mcp.json` in VS
+Code's user folder (`%APPDATA%\Code\User\mcp.json` on Windows,
+`~/Library/Application Support/Code/User/mcp.json` on macOS, `~/.config/Code/User/mcp.json` on
+Linux), or `.vscode/mcp.json` in a workspace, with its servers under `servers`:
+
+```json
+{
+  "servers": {
+    "handoff": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "baton-handoff-mcp"],
+      "env": { "HANDOFF_AGENT": "copilot" }
+    }
+  }
+}
+```
+
+**The Copilot CLI** (`copilot`) reads `~/.copilot/mcp-config.json` (`COPILOT_HOME` moves the
+folder), or `.mcp.json` and `.github/mcp.json` in a workspace it trusts, with its servers under
+`mcpServers` — the shape `copilot mcp add` writes:
+
+```json
+{
+  "mcpServers": {
+    "handoff": {
+      "type": "local",
+      "command": "npx",
+      "args": ["-y", "baton-handoff-mcp"],
+      "env": { "HANDOFF_AGENT": "copilot", "HANDOFF_TOOL_TIMEOUT_MS": "1800000" },
+      "tools": ["*"],
+      "timeout": 1800000
+    }
+  }
+}
+```
+
+VS Code starts a server when a chat request needs it, not when a window opens, and asks you to
+trust it the first time. It starts it in your home folder and names the window's folder only
+as a root of its MCP client, which the server asks for and takes as its project folder; a
+window with no folder open has none. Started by VS Code directly — `node` and the path of
+`dist/handoff-mcp.cjs` with `serve`, or the app's own executable — the server tells the overlay
+that VS Code hosts the session; through `npx` there is a launcher in between, and the session
+is keyed on its parent like a CLI agent's.
+
+The CLI starts the server in the folder it works in. In print mode (`copilot -p`) it does not
+wait for its servers before the model's first call, so a server started through a cold `npx`
+may not be there in time for a one-shot prompt; an interactive session does not have the
+problem. `--allow-tool=handoff` allows this server's tools and nothing else. This was measured
+with VS Code 1.137.0 and the Copilot CLI 1.0.83 on Windows; see
+[measured agent facts](agent-facts.md#github-copilot).
+
 Any other MCP client works the same way: a stdio server, one command, no arguments. What
 changes is the name and the shape of that client's configuration file.
 
@@ -154,8 +208,8 @@ step 1 you can silently land on `unknown`, which heartbeats every 50 seconds and
 images and no hook. Everything still works — that is what `base` support means — but you get
 the cautious version of it.
 
-The value is the agent id from the table: `claude-code`, `codex`, `cursor` and `opencode`
-today, with `copilot` reserved for its adapter. `handoff-mcp doctor` prints the row it
+The value is the agent id from the table: `claude-code`, `codex`, `cursor`, `copilot` and
+`opencode` today. `handoff-mcp doctor` prints the row it
 resolved and whether it came from `HANDOFF_AGENT` or from the `unknown` row — it has no MCP
 handshake of its own, so it cannot show you step 2.
 
@@ -171,7 +225,8 @@ hit, the agent calls back with `resume`, and the loop continues for as long as t
   `tool_timeout_sec` in the server's table, in **seconds**: `tool_timeout_sec = 1800`. In
   OpenCode it is `"timeout"` in the server's entry, in milliseconds again — and more worth
   setting than elsewhere, because with nothing configured OpenCode cuts a call after sixty
-  seconds.
+  seconds. In the Copilot CLI it is `"timeout"` in the entry of `mcp-config.json`, in
+  milliseconds (`copilot mcp add --timeout`); VS Code's `mcp.json` has no such field.
 - **Cursor has none**, and nothing in its entry raises the limit: its CLI cuts a call after
   sixty seconds and its editor after two minutes without progress. Leave
   `HANDOFF_TOOL_TIMEOUT_MS` out of a Cursor entry as well, so that the server keeps its
@@ -256,6 +311,15 @@ the payload Cursor hands a `stop` hook — its own, or a Claude Code `Stop` hook
 own — carries no `stop_hook_active`, so `handoff-mcp hook stop` answers it with nothing. The
 hook above, installed for Claude Code, is therefore harmless when Cursor runs it (see
 [its Cursor section](agent-facts.md#cursor)).
+
+**GitHub Copilot has none to register either**, although both of its surfaces run hooks. VS
+Code reads a Stop hook's decision from a field of its own, so a Claude Code-shaped answer is
+not one it acts on. The Copilot CLI runs its own `agentStop` hooks, and it also runs a
+project's `.claude/settings.json` hooks as its own — not the ones in your
+`~/.claude/settings.json` — with Claude Code's payload, which this hook reads: installed for
+Claude Code in a project, the hook above then reaches the overlay from a Copilot turn, and
+what it says is the overlay's decision (see
+[its GitHub Copilot section](agent-facts.md#github-copilot)).
 
 ## Check it: `doctor`
 

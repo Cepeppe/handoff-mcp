@@ -256,6 +256,24 @@ describe('registration', () => {
     await flush();
     expect(context.apps).toHaveLength(1);
   });
+
+  it('sends the project folder the session was described with over the one it was built with (T-072)', async () => {
+    const context = harness();
+    context.client.describeSession({
+      agentId: 'copilot',
+      client: { name: 'Visual Studio Code', version: '1.137.0' },
+      capabilityRow: { ...CAPABILITY_ROW, agent_id: 'copilot', support: 'base', stop_hook: false },
+      projectDir: '/Users/g/dev/blog',
+    });
+    context.client.start();
+    await flush();
+
+    const params = helloOf(context.app()).params as {
+      identity: { project_dir: string; cwd: string };
+    };
+    expect(params.identity.project_dir).toBe('/Users/g/dev/blog');
+    expect(params.identity.cwd).toBe(IDENTITY.cwd);
+  });
 });
 
 describe('when registration fails', () => {

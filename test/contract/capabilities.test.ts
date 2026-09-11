@@ -195,8 +195,10 @@ describe('capabilities.json', () => {
   });
 
   it('keeps every planned adapter at base support with unmeasured fields null', () => {
+    // GitHub Copilot, the last planned row, shipped its measured row with T-072; a later
+    // adapter that enters the table as planned is held to the same shape.
     const planned = CAPABILITY_TABLE.filter((row) => row.status === 'planned');
-    expect(planned.map((row) => row.agent_id)).toEqual(['copilot']);
+    expect(planned.map((row) => row.agent_id)).toEqual([]);
     for (const row of planned) {
       expect(row.support).toBe('base');
       expect(row.tool_timeout_ms_default).toBeNull();
@@ -209,18 +211,46 @@ describe('capabilities.json', () => {
   it('records a client name only where the canary suite measured one (A-08)', () => {
     // `claude-code` is what Claude Code 2.1.263 sends in the `initialize` handshake (measured
     // on 2026-09-08), `codex-mcp-client` what Codex 0.153.4 sends (2026-09-10), `opencode`
-    // what OpenCode 1.18.29 sends (2026-09-11), and Cursor's editor sends `cursor-vscode` and
-    // its CLI `Cursor` (3.20.10 and 2026.09.10-fd3934a, 2026-09-11), all by `test/canary` and
-    // written down in `docs/agent-facts.md`. Copilot has not shipped, so its list holds no guess.
+    // what OpenCode 1.18.29 sends (2026-09-11), Cursor's editor sends `cursor-vscode` and its
+    // CLI `Cursor` (3.20.10 and 2026.09.10-fd3934a, 2026-09-11), and VS Code sends
+    // `Visual Studio Code` and the GitHub Copilot CLI `copilot-cli` (1.137.0 and 1.0.83,
+    // 2026-09-11), all by `test/canary` and written down in `docs/agent-facts.md`.
     const measured: Readonly<Record<string, readonly string[]>> = {
       'claude-code': ['claude-code'],
       codex: ['codex-mcp-client'],
       cursor: ['cursor-vscode', 'Cursor'],
+      copilot: ['Visual Studio Code', 'copilot-cli'],
       opencode: ['opencode'],
     };
     for (const row of CAPABILITY_TABLE) {
       expect(row.match.client_names, row.agent_id).toEqual(measured[row.agent_id] ?? []);
     }
+  });
+
+  it('states the copilot row as the T-072 measurements found it', () => {
+    // VS Code 1.137.0 and the GitHub Copilot CLI 1.0.83, 2026-09-11, `test/canary/agents/copilot`
+    // and `docs/agent-facts.md`: VS Code sends `Visual Studio Code` and the CLI `copilot-cli`;
+    // the CLI's per-server `timeout` is milliseconds and a call it cuts is cancelled, while a
+    // 90 s call with nothing configured ran uncut, so the default is only bounded from below;
+    // images reach the model; and although both surfaces run hooks, none of them answers our
+    // hook on both surfaces the way the agent honours it, so the row says no hook. The row keys
+    // the editor surface on the chain; each session resolves its own.
+    expect(CAPABILITY_TABLE.find((row) => row.agent_id === 'copilot')).toEqual({
+      agent_id: 'copilot',
+      display_name: 'GitHub Copilot',
+      status: 'supported',
+      support: 'base',
+      match: { env: 'copilot', client_names: ['Visual Studio Code', 'copilot-cli'] },
+      tool_timeout_ms_default: null,
+      per_server_timeout_field: 'timeout',
+      images_in_results: true,
+      stop_hook: false,
+      subagent_stop_hook: false,
+      session_identity: 'ancestor_chain:editor',
+      user_request_delivery: ['clipboard_focus'],
+      cancellation_notifications: true,
+      heartbeat_after_ms: null,
+    });
   });
 
   it('keeps each measured client name resolving to its own row without HANDOFF_AGENT', () => {
@@ -231,6 +261,8 @@ describe('capabilities.json', () => {
     expect(resolveRow({ clientName: 'opencode' }).agent_id).toBe('opencode');
     expect(resolveRow({ clientName: 'cursor-vscode' }).agent_id).toBe('cursor');
     expect(resolveRow({ clientName: 'Cursor' }).agent_id).toBe('cursor');
+    expect(resolveRow({ clientName: 'Visual Studio Code' }).agent_id).toBe('copilot');
+    expect(resolveRow({ clientName: 'copilot-cli' }).agent_id).toBe('copilot');
   });
 
   it('keys the editor-hosted agents on the ancestor chain (ADPT-02, R-12)', () => {

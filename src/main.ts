@@ -448,6 +448,8 @@ async function runServe(streams: CliStreams): Promise<number> {
   // A fact about this session, not about the agent: sent only when it is the editor key.
   const session = resolveSessionIdentity(identity.ancestors, config.editorPid);
   const sessionIdentity = session.editor === undefined ? undefined : session.kind;
+  // T-072: an editor that named its workspace in no variable names it as an MCP root.
+  const projectDirFromRoots = session.editor !== undefined && config.projectDirFrom === 'cwd';
 
   const channel = new ChannelClient({
     identity: {
@@ -471,7 +473,8 @@ async function runServe(streams: CliStreams): Promise<number> {
       channel,
       runbooks: new RunbookStore(defaultRunbookRoots(), { warn: streams.err }),
       logger,
-      onInitialized: (resolved, client) => {
+      projectDirFromRoots,
+      onInitialized: (resolved, client, workspace) => {
         channel.describeSession({
           agentId: resolved.agent_id,
           client,
@@ -480,6 +483,7 @@ async function runServe(streams: CliStreams): Promise<number> {
             toolTimeoutMs(resolved, config),
             sessionIdentity,
           ),
+          ...(workspace === undefined ? {} : { projectDir: workspace }),
         });
         channel.start();
       },

@@ -1,15 +1,15 @@
 /**
- * The command line of `pnpm canary` (T-023, T-066, T-074): which scenarios to run, of which
- * agent.
+ * The command line of `pnpm canary` (T-023, T-066, T-074, T-069, T-072): which scenarios to
+ * run, of which agent.
  *
- * `--agent claude-code`, `--agent codex` or `--agent opencode` keeps one agent's scenarios —
- * `canary.yml` runs each agent in its own job with its own credential — `--list` prints what
- * exists, and any other argument that does not start with `--` is a scenario id. Pure, so the
- * unit suite pins it.
+ * `--agent <id>` keeps one agent's scenarios — `canary.yml` runs each agent in its own job with
+ * its own credential, and Cursor and Copilot are run by hand with `--agent cursor` and
+ * `--agent copilot` — `--list` prints what exists, and any other argument that does not start
+ * with `--` is a scenario id. Pure, so the unit suite pins it.
  */
 
 /** The agents the canary knows how to run. */
-export const CANARY_AGENTS = ['claude-code', 'codex', 'opencode', 'cursor'] as const;
+export const CANARY_AGENTS = ['claude-code', 'codex', 'opencode', 'cursor', 'copilot'] as const;
 
 export type CanaryAgent = (typeof CANARY_AGENTS)[number];
 

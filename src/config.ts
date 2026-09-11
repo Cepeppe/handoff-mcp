@@ -61,6 +61,9 @@ export const HOME_FOLDER_NAME = '.handoff';
 /** A `process.env`-shaped record, injectable so tests never mutate the real environment. */
 export type EnvRecord = Readonly<Record<string, string | undefined>>;
 
+/** Where the project folder was read from (§5.8, T-069, T-072). */
+export type ProjectDirSource = 'CLAUDE_PROJECT_DIR' | 'WORKSPACE_FOLDER_PATHS' | 'cwd';
+
 export interface Config {
   /** `HANDOFF_AGENT`, the installer-written agent id. Authoritative when it names a row. */
   readonly agent: string | undefined;
@@ -75,6 +78,12 @@ export interface Config {
    * directory (A-24, §5.8, T-069).
    */
   readonly projectDir: string;
+  /**
+   * Which of the three `projectDir` came from. For a session an editor started, `cwd` means
+   * the environment named no folder and the working directory is the editor's choice rather
+   * than a project, so `serve` asks the client's MCP roots before it registers (T-072).
+   */
+  readonly projectDirFrom: ProjectDirSource;
   /** `HANDOFF_MCP_LOG`, `error` unless it says `debug`. */
   readonly logLevel: LogLevel;
   /**
@@ -237,15 +246,20 @@ export function envNamesPresent(
 /** Reads the whole environment once, at startup (§5.3). */
 export function readConfig(env: EnvRecord = process.env, cwd: string = process.cwd()): Config {
   const ignored: EnvVarName[] = [];
+  const claudeProjectDir = readString(env, 'CLAUDE_PROJECT_DIR');
+  const workspaceFolder = firstWorkspaceFolder(readString(env, 'WORKSPACE_FOLDER_PATHS'));
   return {
     agent: readString(env, 'HANDOFF_AGENT'),
     toolTimeoutMs: readDurationMs(env, 'HANDOFF_TOOL_TIMEOUT_MS', ignored),
     mcpToolTimeoutMs: readDurationMs(env, 'MCP_TOOL_TIMEOUT', ignored),
     home: homeDir(env),
-    projectDir:
-      readString(env, 'CLAUDE_PROJECT_DIR') ??
-      firstWorkspaceFolder(readString(env, 'WORKSPACE_FOLDER_PATHS')) ??
-      cwd,
+    projectDir: claudeProjectDir ?? workspaceFolder ?? cwd,
+    projectDirFrom:
+      claudeProjectDir !== undefined
+        ? 'CLAUDE_PROJECT_DIR'
+        : workspaceFolder !== undefined
+          ? 'WORKSPACE_FOLDER_PATHS'
+          : 'cwd',
     logLevel: readLogLevel(env, ignored),
     canary: readString(env, 'HANDOFF_CANARY') === '1',
     editorPid: readProcessId(env, 'VSCODE_PID', ignored),

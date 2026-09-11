@@ -82,24 +82,28 @@ per session, from `HANDOFF_AGENT` if the environment sets it, otherwise from the
 `base` is not a broken mode: the instruction in every outcome is written so that an agent
 which reads nothing else still behaves correctly. The rows that ship today:
 
-| Agent (`HANDOFF_AGENT`) | Level  | Images in tool results | End-of-turn hook | Per-server timeout field       |
-| ----------------------- | ------ | ---------------------- | ---------------- | ------------------------------ |
-| `claude-code`           | `full` | yes                    | yes              | `timeout`, in milliseconds     |
-| `codex`                 | `base` | yes                    | no               | `tool_timeout_sec`, in seconds |
-| `cursor`                | `base` | yes                    | no               | none                           |
-| `opencode`              | `base` | yes                    | no               | `timeout`, in milliseconds     |
-| `unknown` (any other)   | `base` | no                     | no               | —                              |
+| Agent (`HANDOFF_AGENT`) | Level  | Images in tool results | End-of-turn hook | Per-server timeout field               |
+| ----------------------- | ------ | ---------------------- | ---------------- | -------------------------------------- |
+| `claude-code`           | `full` | yes                    | yes              | `timeout`, in milliseconds             |
+| `codex`                 | `base` | yes                    | no               | `tool_timeout_sec`, in seconds         |
+| `cursor`                | `base` | yes                    | no               | none                                   |
+| `copilot`               | `base` | yes                    | no               | `timeout`, in milliseconds (the CLI's) |
+| `opencode`              | `base` | yes                    | no               | `timeout`, in milliseconds             |
+| `unknown` (any other)   | `base` | no                     | no               | —                                      |
 
-`copilot` is in the table with `status: planned` and enters it as its adapter ships. Every
-value of a shipped row was measured against the real agent;
-[measured agent facts](agent-facts.md) says when, and against which version.
+Every value of a shipped row was measured against the real agent;
+[measured agent facts](agent-facts.md) says when, and against which version. `copilot` is
+GitHub Copilot on both of its surfaces, VS Code's chat and the Copilot CLI.
 
 One fact belongs to a session rather than to its agent: whether an editor started the server.
-A CLI agent starts it itself, and the overlay keys that session on the server's parent.
-Cursor's editor starts it from its own extension host, once per window, so the server tells
-the overlay to key that session on the editor and on its workspace folder instead; the
-[channel](channel.md) carries it as `session_identity`. Cursor's CLI shares the `cursor` row
-and is keyed on its parent like any other CLI agent.
+A CLI agent starts it itself, and the overlay keys that session on the server's parent. An
+editor of the VS Code family — Cursor's, and VS Code, where Copilot runs — starts it from its
+own extension host, once per window, so the server tells the overlay to key that session on
+the editor and on its workspace folder instead; the [channel](channel.md) carries it as
+`session_identity`. The workspace folder is the one Cursor names in `WORKSPACE_FOLDER_PATHS`,
+or, where an editor names it in no variable, as VS Code does, the first of the roots its MCP
+client lists. Cursor's CLI and the Copilot CLI share their editor's row and are keyed on
+their parent like any other CLI agent.
 
 Remote agents (an agent running in the cloud rather than on your machine) find no socket and
 get [text mode](text-mode.md) with no extra code. That works, and it is not supported: there

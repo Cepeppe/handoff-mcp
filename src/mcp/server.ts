@@ -46,6 +46,7 @@ import {
   heartbeatAfterMs,
   resolveCapabilityRow,
   resolveToolTimeout,
+  workspaceFromRoots,
   type ResolvedCapabilityRow,
 } from '../adapters';
 import { InFlightCalls, readSnapshot, type WaitOutcome } from '../calls';
@@ -99,6 +100,13 @@ import { type ChannelPort } from './port';
 /** The name the server reports in `initialize`; it is the executable's, not the package's. */
 export const SERVER_NAME = 'handoff-mcp';
 
+/**
+ * How long the server waits for a client's `roots/list` before it registers without the
+ * answer (T-072). VS Code answers at once; the bound is for a client that declares roots and
+ * then never says what they are, which must cost the session its folder and nothing more.
+ */
+export const ROOTS_TIMEOUT_MS = 2_000;
+
 /** Everything the pipeline needs, injected so a test drives it without a process. */
 export interface ServerDeps {
   /** The environment read once at startup (§5.3). */
@@ -129,8 +137,25 @@ export interface ServerDeps {
    * required field of the channel and the row decides the heartbeat the app is told about.
    * It is still "at session start rather than at the first tool call" (SRV-20) — `initialize`
    * is the first thing an MCP client does.
+   *
+   * `workspace` is the folder the client named as its first root, when `projectDirFromRoots`
+   * asked for one and the client had one to name; `undefined` otherwise.
    */
-  readonly onInitialized?: (row: ResolvedCapabilityRow, client: ClientInfo) => void;
+  readonly onInitialized?: (
+    row: ResolvedCapabilityRow,
+    client: ClientInfo,
+    workspace: string | undefined,
+  ) => void;
+  /**
+   * Ask the client for its MCP roots once the handshake is over, and hand the first folder to
+   * `onInitialized` (T-072). `serve` sets it for a session keyed on the editor whose
+   * environment named no project folder: VS Code starts its servers in the home folder and
+   * names the window's workspace only as a root. A client that declares no roots is not asked,
+   * and registration waits for the answer at most `ROOTS_TIMEOUT_MS`.
+   */
+  readonly projectDirFromRoots?: boolean;
+  /** How long `roots/list` may take, overriding `ROOTS_TIMEOUT_MS`; a test injects less. */
+  readonly rootsTimeoutMs?: number;
   /**
    * The agent's pipes. `serve` uses the process's own; a test hands it a pair so it can pull
    * stdin out from under the server and watch it stop, without writing the MCP transport to
@@ -653,10 +678,29 @@ export function createServer(deps: ServerDeps): Server {
       ppid: process.ppid,
       server_version: deps.version,
     });
-    deps.onInitialized?.(row, {
+    const client: ClientInfo = {
       name: info?.name ?? row.agent_id,
       version: typeof info?.version === 'string' ? info.version : '0.0.0',
-    });
+    };
+    if (deps.projectDirFromRoots !== true || server.getClientCapabilities()?.roots === undefined) {
+      deps.onInitialized?.(row, client, undefined);
+      return;
+    }
+    // T-072: the folder the editor's window has open, as its client names it. Registration
+    // waits for the answer, briefly, because `hello` is where the folder goes; a refusal or a
+    // silence is no folder, and the session registers with the one its environment gave.
+    void server
+      .listRoots(undefined, { timeout: deps.rootsTimeoutMs ?? ROOTS_TIMEOUT_MS })
+      .then(
+        (answer) => answer.roots,
+        () => [],
+      )
+      .then((roots) => {
+        const workspace = workspaceFromRoots(roots);
+        canary?.record('roots', { count: roots.length, used: workspace !== undefined });
+        deps.logger.debug('session_roots', { root_count: roots.length });
+        deps.onInitialized?.(row, client, workspace);
+      });
   };
 
   server.setRequestHandler(ListToolsRequestSchema, () => {

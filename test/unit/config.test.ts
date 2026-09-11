@@ -115,6 +115,15 @@ describe('the project folder (A-24)', () => {
     expect(firstWorkspaceFolder(',')).toBeUndefined();
     expect(firstWorkspaceFolder(`,${SHOP}`)).toBe(SHOP);
   });
+
+  it('says where it came from, which decides whether an editor session asks its client (T-072)', () => {
+    expect(config({ CLAUDE_PROJECT_DIR: BLOG, WORKSPACE_FOLDER_PATHS: SHOP }).projectDirFrom).toBe(
+      'CLAUDE_PROJECT_DIR',
+    );
+    expect(config({ WORKSPACE_FOLDER_PATHS: SHOP }).projectDirFrom).toBe('WORKSPACE_FOLDER_PATHS');
+    expect(config({}).projectDirFrom).toBe('cwd');
+    expect(config({ WORKSPACE_FOLDER_PATHS: 'relative/shop' }).projectDirFrom).toBe('cwd');
+  });
 });
 
 describe('the editor pointer (T-069)', () => {

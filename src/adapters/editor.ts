@@ -27,7 +27,14 @@
  * Anything short of both is `parent_pid`, the key every session had before this module. The
  * failure directions are not symmetric: a wrong "editor" would widen a key that was precise,
  * while a wrong "parent" leaves a session exactly where it always was (PRIN-10).
+ *
+ * An editor also knows which folder a window has open, and says so in one of two ways: Cursor
+ * in `WORKSPACE_FOLDER_PATHS` (`src/config.ts`), VS Code only as the MCP roots of its client
+ * (T-072). `workspaceFromRoots` reads the second; `serve` asks for it only for a session this
+ * module keyed on the editor and whose environment named no folder.
  */
+import { fileURLToPath } from 'node:url';
+
 import type { ProcessAncestor } from '../platform';
 
 /** The key of a CLI agent's session: the server's parent (SRV-17). */
@@ -103,4 +110,38 @@ export function resolveSessionIdentity(
   return editor === undefined
     ? { kind: PARENT_PID_SESSION_IDENTITY, editor: undefined }
     : { kind: EDITOR_SESSION_IDENTITY, editor };
+}
+
+/** One root of an MCP client's `roots/list` answer, as far as this module reads it. */
+export interface ClientRoot {
+  readonly uri: string;
+}
+
+/**
+ * The folder of the first `file:` root a client names, or `undefined` (T-072).
+ *
+ * VS Code starts its servers in the user's home folder and puts the window's workspace in no
+ * variable: it names it only as the roots of its MCP client, one per workspace folder, as
+ * `file:` URIs (`file:///c%3A/…` on Windows), and answers an empty list for a window with no
+ * folder open (measured against VS Code 1.137.0, `docs/agent-facts.md`). The first root is the
+ * window's main folder, as the first folder of `WORKSPACE_FOLDER_PATHS` is Cursor's. A root of
+ * another scheme names no folder on this machine and is passed over, and so is a URI that does
+ * not parse.
+ */
+export function workspaceFromRoots(roots: readonly ClientRoot[]): string | undefined {
+  for (const root of roots) {
+    let url: URL;
+    try {
+      url = new URL(root.uri);
+    } catch {
+      continue;
+    }
+    if (url.protocol !== 'file:') continue;
+    try {
+      return fileURLToPath(url);
+    } catch {
+      // A file URI with a host, or with an encoded separator, names nothing this process opens.
+    }
+  }
+  return undefined;
 }

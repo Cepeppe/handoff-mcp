@@ -155,6 +155,11 @@ export interface ChannelSession {
   readonly agentId: string;
   readonly client: ClientInfo;
   readonly capabilityRow: HelloCapabilityRow;
+  /**
+   * The project folder, when the MCP handshake told the server better than its environment
+   * did: the first root of an editor's client (T-072). Absent, `hello` sends the identity's.
+   */
+  readonly projectDir?: string;
 }
 
 interface Pending {
@@ -364,7 +369,7 @@ export class ChannelClient {
    */
   private helloParams(token: string): JsonRpcParams {
     const { identity, serverVersion } = this.options;
-    const { agentId, client, capabilityRow } = this.session;
+    const { agentId, client, capabilityRow, projectDir } = this.session;
     return {
       protocol_version: PROTOCOL_VERSION,
       token,
@@ -378,7 +383,7 @@ export class ChannelClient {
           name: ancestor.name,
         })),
         cwd: identity.cwd,
-        project_dir: identity.project_dir,
+        project_dir: projectDir ?? identity.project_dir,
       },
       agent_id: agentId,
       client: { name: client.name, version: client.version },

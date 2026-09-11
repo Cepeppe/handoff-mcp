@@ -9,6 +9,41 @@ schema version, which is independent of the package version.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-11
+
+GitHub Copilot is the fifth agent in the capability table, on both of its surfaces — VS Code's
+chat and the Copilot CLI — measured against VS Code 1.137.0 and the CLI 1.0.83 rather than
+assumed. It is supported at `base` level: images reach the model, the CLI honours a per-server
+timeout and cancels a call it cuts, but no end-of-turn hook answers this server's hook on both
+surfaces in a way the agent acts on. VS Code is the second editor-hosted agent, and the first
+that names its workspace in no variable: a server it starts now asks the MCP client for its
+roots. The public formats and the channel definition are unchanged since `0.1.0`.
+
+### Added
+
+- The `copilot` row of the capability table is `supported`, with the values measured on
+  2026-09-11: `clientInfo.name` `Visual Studio Code` from VS Code and `copilot-cli` from the
+  CLI, images in tool results, the CLI's per-server field `timeout` (in milliseconds), an MCP
+  cancellation when a call is cut, a default timeout that is only bounded from below (a 90 s
+  call ran uncut in the CLI, and VS Code's MCP client sets none), and no end-of-turn hook. An
+  entry written by hand with no `HANDOFF_AGENT` now resolves to the Copilot row from either
+  handshake.
+- The project folder of a session an editor started, when the editor names its workspace in no
+  variable, is the first `file:` root its MCP client lists. VS Code starts its servers in the
+  user's home folder and names the window's folders only as roots; the server asks for them
+  between the handshake and `hello`, for at most two seconds, and keeps the working directory
+  when there are none — a window with no folder open. Cursor, which names its workspace in
+  `WORKSPACE_FOLDER_PATHS`, is unchanged, and so is every session that is not an editor's.
+- GitHub Copilot canary scenarios in `test/canary/agents/copilot/`: VS Code's session identity,
+  measured by launching a VS Code of the harness's own with a starter extension, with no agent
+  request; what the server sees of a CLI session, images, and the hooks around a turn; E2E-8
+  in text mode; the per-server and the default timeout; the degraded path.
+  `pnpm canary -- --agent copilot` runs them. Each CLI run spends the account's AI credits, so
+  the set runs by hand and is not in `canary.yml`.
+- Documentation: registering the server in GitHub Copilot, on both surfaces
+  (`docs/install-without-app.md`), its row in the support-level table (`docs/index.md`), and
+  what was measured against VS Code and the Copilot CLI (`docs/agent-facts.md`).
+
 ## [1.5.0] - 2026-09-11
 
 Cursor is the fourth agent in the capability table, on both of its surfaces, measured against

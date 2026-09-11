@@ -23,6 +23,27 @@ const MEASURED: readonly CapabilityRow[] = CAPABILITY_TABLE.map((row) =>
     : row,
 );
 
+/** A row as an adapter enters the table before it ships: every measured field still null. */
+const PLANNED: CapabilityRow = {
+  agent_id: 'planned-agent',
+  display_name: 'A planned agent',
+  status: 'planned',
+  support: 'base',
+  match: { env: 'planned-agent', client_names: [] },
+  tool_timeout_ms_default: null,
+  per_server_timeout_field: null,
+  images_in_results: null,
+  stop_hook: null,
+  subagent_stop_hook: null,
+  session_identity: 'parent_pid',
+  user_request_delivery: null,
+  cancellation_notifications: null,
+  heartbeat_after_ms: null,
+};
+
+/** The real table with that row in it: since T-072 every row of the real one is measured. */
+const WITH_PLANNED: readonly CapabilityRow[] = [...CAPABILITY_TABLE, PLANNED];
+
 describe('identity order', () => {
   it('takes HANDOFF_AGENT first: the installer knows what it wrote', () => {
     const row = resolveRow({ agent: 'codex', clientName: 'claude-code' }, MEASURED);
@@ -81,14 +102,29 @@ describe('null fields fall back to the unknown row', () => {
   const unknown = unknownRow();
 
   it('gives a planned adapter the base behaviour of the unknown row', () => {
+    const planned = resolveCapabilityRow({ agent: 'planned-agent' }, WITH_PLANNED);
+    expect(planned.agent_id).toBe('planned-agent');
+    expect(planned.images_in_results).toBe(unknown.images_in_results);
+    expect(planned.stop_hook).toBe(unknown.stop_hook);
+    expect(planned.subagent_stop_hook).toBe(unknown.subagent_stop_hook);
+    expect(planned.user_request_delivery).toEqual(unknown.user_request_delivery);
+    expect(planned.cancellation_notifications).toBe(unknown.cancellation_notifications);
+    expect(planned.heartbeat_after_ms).toBe(50_000);
+  });
+
+  it('keeps every value the copilot row measured, and inherits only the heartbeat (T-072)', () => {
     const copilot = resolveCapabilityRow({ agent: 'copilot' });
-    expect(copilot.agent_id).toBe('copilot');
-    expect(copilot.images_in_results).toBe(unknown.images_in_results);
-    expect(copilot.stop_hook).toBe(unknown.stop_hook);
-    expect(copilot.subagent_stop_hook).toBe(unknown.subagent_stop_hook);
-    expect(copilot.user_request_delivery).toEqual(unknown.user_request_delivery);
-    expect(copilot.cancellation_notifications).toBe(unknown.cancellation_notifications);
-    expect(copilot.heartbeat_after_ms).toBe(50_000);
+    expect(copilot.status).toBe('supported');
+    expect(copilot.support).toBe('base');
+    expect(copilot.stop_hook).toBe(false);
+    expect(copilot.subagent_stop_hook).toBe(false);
+    expect(copilot.user_request_delivery).toEqual(['clipboard_focus']);
+    expect(copilot.images_in_results).toBe(true);
+    expect(copilot.cancellation_notifications).toBe(true);
+    expect(copilot.per_server_timeout_field).toBe('timeout');
+    expect(copilot.tool_timeout_ms_default).toBeNull();
+    expect(copilot.session_identity).toBe('ancestor_chain:editor');
+    expect(copilot.heartbeat_after_ms).toBe(unknown.heartbeat_after_ms);
   });
 
   it('keeps every value the cursor row measured, its CLI 60 s default included (T-069)', () => {
@@ -153,16 +189,18 @@ describe('null fields fall back to the unknown row', () => {
   });
 
   it('leaves the two fields the unknown row cannot fill as null', () => {
-    const resolved = resolveCapabilityRow({ agent: 'copilot' });
+    const resolved = resolveCapabilityRow({ agent: 'planned-agent' }, WITH_PLANNED);
     expect(resolved.tool_timeout_ms_default).toBeNull();
     expect(resolved.per_server_timeout_field).toBeNull();
   });
 
   it('refuses a table whose unknown row is itself incomplete', () => {
-    const broken = CAPABILITY_TABLE.map((row) =>
+    const broken = WITH_PLANNED.map((row) =>
       row.agent_id === 'unknown' ? { ...row, images_in_results: null } : row,
     );
-    expect(() => resolveCapabilityRow({ agent: 'copilot' }, broken)).toThrow(/images_in_results/u);
+    expect(() => resolveCapabilityRow({ agent: 'planned-agent' }, broken)).toThrow(
+      /images_in_results/u,
+    );
   });
 
   it('refuses a table with no unknown row at all', () => {

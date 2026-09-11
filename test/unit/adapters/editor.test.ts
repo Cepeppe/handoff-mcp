@@ -9,6 +9,9 @@
  * Kilo Code's extension, a CLI agent in an editor terminal and a launcher. The macOS names are
  * Electron's helper names.
  */
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -17,6 +20,7 @@ import {
   editorHost,
   isEditorExecutable,
   resolveSessionIdentity,
+  workspaceFromRoots,
 } from '../../../src/adapters';
 
 /** Cursor's main process: the one `VSCODE_PID` names. */
@@ -121,4 +125,39 @@ describe("the editor's own executable", () => {
     expect(isEditorExecutable('claude.exe', 'Code.exe')).toBe(false);
     expect(isEditorExecutable('Cursor.exe', '')).toBe(false);
   });
+});
+
+describe('the folder a client names as its first root (T-072)', () => {
+  /** Absolute on whichever platform runs the suite, and the URI a client would send for it. */
+  const SHOP = resolve('/work', 'shop');
+  const BLOG = resolve('/work', 'blog');
+  const uri = (folder: string): string => pathToFileURL(folder).href;
+
+  it("is the first file: root, the window's main folder", () => {
+    expect(workspaceFromRoots([{ uri: uri(SHOP) }, { uri: uri(BLOG) }])).toBe(SHOP);
+  });
+
+  it('passes over a root of another scheme and a URI that does not parse', () => {
+    expect(
+      workspaceFromRoots([
+        { uri: 'vscode-remote://ssh-remote+box/home/g/shop' },
+        { uri: 'not a uri' },
+        { uri: uri(BLOG) },
+      ]),
+    ).toBe(BLOG);
+  });
+
+  it('is nothing for a window with no folder open, which VS Code answers with no roots', () => {
+    expect(workspaceFromRoots([])).toBeUndefined();
+    expect(workspaceFromRoots([{ uri: 'untitled:Untitled-1' }])).toBeUndefined();
+  });
+
+  it.runIf(process.platform === 'win32')(
+    'reads the drive letter VS Code percent-encodes on Windows (measured, 1.137.0)',
+    () => {
+      expect(workspaceFromRoots([{ uri: 'file:///c%3A/Users/g/dev/shop' }])).toBe(
+        'c:\\Users\\g\\dev\\shop',
+      );
+    },
+  );
 });

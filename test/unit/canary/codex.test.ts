@@ -284,9 +284,9 @@ describe('the pnpm canary command line', () => {
   });
 
   it('refuses an agent it cannot run, rather than running nothing', () => {
-    expect(parseCanaryArguments(['--agent', 'copilot']).error).toContain('copilot');
+    expect(parseCanaryArguments(['--agent', 'kilo-code']).error).toContain('kilo-code');
     expect(parseCanaryArguments(['--agent']).error).toBeDefined();
-    expect(CANARY_AGENTS).toEqual(['claude-code', 'codex', 'opencode', 'cursor']);
+    expect(CANARY_AGENTS).toEqual(['claude-code', 'codex', 'opencode', 'cursor', 'copilot']);
   });
 });
 

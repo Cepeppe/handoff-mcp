@@ -22,8 +22,9 @@ pnpm canary -- observe a03-timeout-honoured    # only these
 pnpm canary -- --list                          # what exists, without spending anything
 ```
 
-`claude`, `codex`, `opencode` and Cursor's `agent` must be on `PATH` and logged in for their
-scenarios, and the Cursor editor scenario needs Cursor installed where it installs itself.
+`claude`, `codex`, `opencode`, Cursor's `agent` and `copilot` must be on `PATH` and logged in
+for their scenarios, and the two editor scenarios need Cursor and VS Code installed where they
+install themselves.
 Each run builds a throw-away project under the system temporary directory with its own
 `HANDOFF_HOME`, so nothing touches `~/.handoff/`, and the report is written to
 `test/canary/results/last-run.json` (git-ignored).
@@ -38,6 +39,9 @@ Each run builds a throw-away project under the system temporary directory with i
 | `HANDOFF_CANARY_OPENCODE`       | The `opencode` program to start, when it is not the one on `PATH`.                                                                                                   |
 | `HANDOFF_CANARY_CURSOR`         | Cursor's `agent` program to start, when it is not the one on `PATH`.                                                                                                 |
 | `HANDOFF_CANARY_CURSOR_EDITOR`  | Cursor's editor executable, when it is not where Cursor installs itself.                                                                                             |
+| `HANDOFF_CANARY_COPILOT_MODEL`  | The model the Copilot CLI runs on. Default `auto`, Copilot's own choice and the only one its Free plan offers.                                                       |
+| `HANDOFF_CANARY_COPILOT`        | The `copilot` program to start, when it is not the one on `PATH`.                                                                                                    |
+| `HANDOFF_CANARY_VSCODE`         | VS Code's executable, when it is not where VS Code installs itself.                                                                                                  |
 | `HANDOFF_CANARY_KEEP=1`         | Keeps each run's temporary project, for reading a failure by hand.                                                                                                   |
 | `HANDOFF_CANARY_SERVER`         | The bundle the MCP entry runs, instead of `dist/handoff-mcp.cjs` of this checkout. A release points it at the tarball it is about to publish.                        |
 
@@ -54,8 +58,14 @@ declared in the run's own project, whose `.cursor/cli.json` allows its tools wit
 `Mcp(handoff:*)` and never `--force`, and what each run leaves under `~/.cursor/` is deleted
 afterwards; a `~/.cursor/mcp.json` of the user's would still load, and none exists on the
 machine these facts were measured on. Cursor's editor is launched with a user-data folder and
-a home folder of the run's own, so the `~/.cursor/mcp.json` it reads is the run's. And
-`CLAUDECODE` is always cleared for the child,
+a home folder of the run's own, so the `~/.cursor/mcp.json` it reads is the run's. The Copilot
+CLI gets a Copilot folder of the run's own through `COPILOT_HOME` — its `mcp-config.json`, its
+hooks, its sessions and its logs — and a home folder of the run's own, so neither the user's
+servers nor a hook of the user's meets a run; it still signs in through the gh login, which
+lives in neither. Its tools are allowed with `--allow-tool=handoff` alone, and the shell and
+file writes are refused. VS Code is launched with a user-data folder, an extensions folder and
+a home folder of the run's own, and a two-file extension of the harness's that starts the
+servers of that profile. And `CLAUDECODE` is always cleared for the child,
 because Claude Code refuses to run nested inside another Claude Code session and the harness
 is normally started from one.
 
@@ -480,6 +490,138 @@ added to those two folders and nothing else. The editor scenario's own Cursor li
 run's temporary folder and is closed, with everything it started, when the server has
 registered.
 
+## GitHub Copilot
+
+**VS Code 1.137.0 and the GitHub Copilot CLI 1.0.83 · Windows 11 (win32-x64) · model `auto`,
+which picked `gpt-5.6-luna`, the one model of the Free plan · 2026-09-11.** All six scenarios
+passed on the first attempt: VS Code's session identity in 10 s with no agent request, and
+the five CLI runs in about three and a half minutes, which spent 2.04 of the account's
+monthly 200 AI credits. Copilot counts a run in AI credits, and `--usage-output-file` gives
+the exact cost of one run in billionths of a credit (`totalNanoAiu`). Two runs were repeated
+while the harness was settled: the observation run, to isolate the home folder and measure
+the user-level hook, and the default timeout, after the first run had disproved the 60 s the
+row had been drafted with. With them the measurement spent 2.98 credits.
+
+Copilot has two surfaces, measured two ways, like Cursor's. **VS Code** starts no server when
+a window opens — it starts one when a chat request needs it, or when it is started by hand —
+so its side is measured by launching a VS Code of the harness's own, a fresh user-data folder
+whose `mcp.json` declares our server, with a two-file extension in development mode that runs
+VS Code's own `workbench.mcp.startServer` command with `{ autoTrustChanges: true }`, which is
+what the "Start" link of `mcp.json` does and which skips the trust prompt. Its chat cannot be
+driven from a script, so nothing about a tool call is measured through it. The **CLI**,
+`copilot -p`, runs a whole turn and is measured like Cursor's.
+
+### Identity and configuration
+
+| Fact                                   | VS Code                                                                                                                                                    | CLI                                                                                                                                                                                                           |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Configuration                          | `mcp.json` in VS Code's user folder, or `.vscode/mcp.json` in a workspace, one entry per server under `servers`: `type: "stdio"`, `command`, `args`, `env` | `~/.copilot/mcp-config.json` (`COPILOT_HOME` moves the folder), or `.mcp.json` / `.github/mcp.json` in a trusted workspace, under `mcpServers`: `type: "local"`, `command`, `args`, `env`, `tools`, `timeout` |
+| Non-interactive command                | —                                                                                                                                                          | `copilot -p … --output-format json`: one session event per line, a `result` event last                                                                                                                        |
+| `clientInfo.name` (A-08)               | `Visual Studio Code`                                                                                                                                       | `copilot-cli`                                                                                                                                                                                                 |
+| `clientInfo.version`                   | `1.137.0`                                                                                                                                                  | `0.0.0`                                                                                                                                                                                                       |
+| What starts the server                 | The extension host, a `Code.exe` whose parent is VS Code's main `Code.exe`                                                                                 | `copilot.exe`, the CLI itself                                                                                                                                                                                 |
+| Server processes                       | One per window                                                                                                                                             | One per `-p` run                                                                                                                                                                                              |
+| The server's working directory (A-24)  | The user's home folder, unless the entry sets `cwd`; no variable names the workspace                                                                       | The folder the CLI works in                                                                                                                                                                                   |
+| The workspace                          | The roots of VS Code's MCP client: one `file:` root per workspace folder, and none in a window with no folder open                                         | —                                                                                                                                                                                                             |
+| `env` of the MCP entry (A-02, A-23)    | Arrives whole, `HANDOFF_PROBE_TOKEN` beside `HANDOFF_PROBE`                                                                                                | Arrives whole, `HANDOFF_PROBE_TOKEN` beside `HANDOFF_PROBE`                                                                                                                                                   |
+| `USERDOMAIN`, `USERNAME`, `VSCODE_PID` | All three present; `VSCODE_PID` is VS Code's main process                                                                                                  | The first two present                                                                                                                                                                                         |
+| When the model can call the tools      | Not measured                                                                                                                                               | Under `-p` the CLI does not wait for its servers before the first model call (T-071); the harness warms the bundle first, and our server was `connected` every time                                           |
+| Approval before a call                 | Not measured                                                                                                                                               | `--allow-tool=handoff` allows this server's tools and nothing else; the model names them `handoff-<tool>`                                                                                                     |
+| Images in tool results (A-07)          | Not measured                                                                                                                                               | Reach the model: the colour of `image_probe` was named                                                                                                                                                        |
+
+`clientInfo.name` is in `src/adapters/capabilities.json` as
+`match.client_names: ["Visual Studio Code", "copilot-cli"]`, so an entry written by hand
+without `HANDOFF_AGENT` resolves to the Copilot row from either surface. VS Code's name is its
+own rather than Copilot's: it is the MCP client of VS Code's chat, which is Copilot's.
+
+### The session identity of an editor (R-12)
+
+VS Code is the second editor the rule of `src/adapters/editor.ts` meets, and it needed no
+change: `VSCODE_PID` names VS Code's main process, the extension host that starts the server
+is a `Code.exe` under it, and the server sends `session_identity: "ancestor_chain:editor"`
+with that chain. Measured by `copilot-editor-identity`: the VS Code the harness launched was
+the second process of the chain, after the extension host.
+
+What VS Code does not do is name its workspace in a variable, as Cursor does with
+`WORKSPACE_FOLDER_PATHS`. It names it as the roots of its MCP client instead — one `file:` URI
+per workspace folder, `file:///c%3A/…` on Windows, answered at once — so a server keyed on the
+editor whose environment names no folder asks `roots/list` between the handshake and `hello`,
+for at most two seconds, and takes the first `file:` root as its project folder. Measured by
+the same scenario: `project_dir` was the workspace while the working directory was the home
+folder. A window with no folder open answers an empty list, and the project folder stays the
+working directory, which the overlay reads as no folder at all.
+
+A session the CLI starts keeps the parent key: its parent is the CLI, no `VSCODE_PID` reaches
+it, and its `hello` carries no `session_identity` (measured by the degraded-path run).
+
+### Tool timeouts and cancellation (A-04, A-09)
+
+| Surface                     | Limit                                                         | How it is known                                                                                                                                      |
+| --------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI, `timeout` in the entry | The entry's `timeout`, in milliseconds; the call is cancelled | Measured: `"timeout": 20000` cut a 60 s `sleep_ms` after 20 010 ms with an MCP cancellation, and the agent saw "MCP error -32001: Request timed out" |
+| CLI, nothing configured     | Longer than 90 s                                              | Measured: a 90 s `sleep_ms` finished uncut, after 90 008 ms                                                                                          |
+| VS Code                     | None of its MCP client's own                                  | Read from the 1.137.0 bundle: VS Code sends a tool call with a cancellation token and no timeout; the limits of its chat around it are not measured  |
+
+`tool_timeout_ms_default` is therefore `null`, as for Claude Code and Codex: the one default
+the table could state is bounded from below only, and `null` gives the safe answer, the 50 s
+heartbeat. `per_server_timeout_field` is the CLI's `timeout`, and `cancellation_notifications`
+is `true`. An entry of the CLI that raises `timeout` should set `HANDOFF_TOOL_TIMEOUT_MS` to
+the same value; VS Code's has nothing to raise.
+
+### The end-of-turn hook
+
+Both surfaces run hooks, and neither answers this server's hook the way the row's
+`stop_hook: true` would promise:
+
+- **The CLI runs its own hooks** — `hooks` in its `config.json`, and `.github/hooks/*.json` in a
+  repository — and under `-p` its `sessionStart`, `agentStop` and `sessionEnd` hooks all ran,
+  through `pwsh.exe` under `copilot.exe`, with `CLAUDE_PROJECT_DIR` set. `agentStop` is handed
+  `cwd`, `sessionId`, `stopReason`, `stop_hook_active`, `timestamp` and `transcriptPath`, and
+  answers `{ "decision": "block", "reason" }` (the CLI's own SDK types, not measured).
+- **The CLI also runs a project's Claude Code hooks as its own.** A `Stop` hook in the
+  project's `.claude/settings.json` ran at the end of the turn, handed Claude Code's own
+  payload: `hook_event_name` `Stop`, `session_id`, `stop_hook_active`, `stop_reason`, `cwd`,
+  `timestamp`, `transcript_path`. `handoff-mcp hook stop` reads that payload. The same hook in
+  the user's `~/.claude/settings.json` did not run. So where Claude Code is registered in a
+  project, a Copilot CLI turn in that project runs this server's hook, and what it answers is
+  the overlay's decision.
+- **VS Code runs hooks** (`chat.useHooks`, on by default and marked preview) from
+  `.github/hooks` and `~/.copilot/hooks`, and Claude Code's own files only with
+  `chat.useClaudeHooks`, which is off by default. Its `Stop` payload carries
+  `stop_hook_active`, but it reads a block only from `hookSpecificOutput.decision` and
+  `.reason`, so the top-level decision this server's hook prints is not one it acts on (read
+  from the 1.137.0 bundle).
+
+So `stop_hook` is `false`, the level is `base`, and a `deferred` or `parked` outcome tells a
+Copilot agent on either surface that nothing will remind it. One row serves both surfaces, and
+promising a reminder VS Code cannot deliver would be the unsafe direction.
+
+### The degraded path (FM-03, FM-04)
+
+The flow of Codex, OpenCode and Cursor, against the real CLI with `test/fake-app` listening:
+
+1. The first `handoff_to_user` call was answered `in_progress` after **50 019 ms**, the
+   heartbeat.
+2. The CLI resumed, as that instruction says. The overlay reported that the user had deferred
+   the step, and the instruction the CLI received was the no-hook variant.
+3. The CLI resumed again before finishing, by itself, and received the final
+   `confirmed_by_user`.
+
+Three results, two resumes, no channel line refused by the schema in either direction, and a
+`hello` without `session_identity`.
+
+### Text mode (E2E-8)
+
+With no overlay listening, `handoff_to_user` answered `status: "text_mode"` with the spec
+rendered as the block of §5.9, and the CLI presented the steps in its reply.
+
+### What a run leaves behind
+
+Every `copilot -p` run writes a session, a session store and logs under `~/.copilot`, and
+`--help` shows no ephemeral mode. The harness moves the folder with `COPILOT_HOME`, so all of
+it goes with the run's temporary folder. The VS Code scenario's own VS Code lives in the run's
+temporary folder and is closed, with everything it started, when the server has registered.
+
 ## The scenarios
 
 | Scenario                      | Covers                                           | What it does                                                          |
@@ -506,11 +648,17 @@ registered.
 | `cursor-e2e-08-text-mode`     | E2E-8                                            | One `handoff_to_user` call with no overlay listening                  |
 | `cursor-degraded-path`        | FM-03, FM-04, SRV-20, R-12                       | Heartbeat, resume, deferral and resume, against `fake-app`            |
 | `cursor-default-timeout`      | FM-04, A-04, A-09                                | `sleep_ms` for 90 s with nothing configured; cut at the 60 s default  |
+| `copilot-editor-identity`     | R-12, SRV-17, SRV-18, SRV-19, A-08               | VS Code, launched on a throw-away project with a starter; no request  |
+| `copilot-observe`             | A-01, A-02, A-05..A-08, A-11, A-23, A-24, SRV-19 | One `handoff_runbooks` call, one `image_probe` call, the hooks        |
+| `copilot-e2e-08-text-mode`    | E2E-8                                            | One `handoff_to_user` call with no overlay listening                  |
+| `copilot-per-server-timeout`  | A-04, A-09                                       | `sleep_ms` past `"timeout": 20000`                                    |
+| `copilot-degraded-path`       | FM-03, FM-04, SRV-20, R-12                       | Heartbeat, resume, deferral and resume, against `fake-app`            |
+| `copilot-default-timeout`     | FM-04, A-09                                      | `sleep_ms` for 90 s with nothing configured; not cut                  |
 
 Not covered here, and why: **A-07** is measured for Codex, OpenCode and Cursor's CLI through
 `image_probe`; the Claude Code scenarios do not run it, and for Claude Code it rests on E2E-3,
-which needs an overlay. Nothing about a tool call is measured through Cursor's editor, whose
-chat cannot be driven from a script.
+which needs an overlay. Nothing about a tool call is measured through Cursor's editor or
+through VS Code, whose chats cannot be driven from a script.
 **A-10** (`/mcp reconnect`) is interactive and stays a manual check; **A-12..A-26** are about
 platforms, OCR, capture and packaging rather than about the agent.
 
@@ -529,7 +677,8 @@ Every assertion declares what it looked at, and that decides what happens when i
 
 ## When to re-run it
 
-After every Claude Code, Codex, OpenCode or Cursor update, and before any release that changes
+After every Claude Code, Codex, OpenCode, Cursor, VS Code or Copilot CLI update, and before
+any release that changes
 how the server talks to an agent. The workflow `.github/workflows/canary.yml` does the same
 thing on a `workflow_dispatch` for the first three, comparing the npm dist-tags of
 `@anthropic-ai/claude-code`, `@openai/codex` and `opencode-ai` against
@@ -537,7 +686,9 @@ thing on a `workflow_dispatch` for the first three, comparing the npm dist-tags 
 `test/canary/last-opencode-version`; each agent's job skips gracefully when its API key is not
 configured, which is the current state. Cursor has no job and no version file: every run of
 its CLI spends one of the account's requests and the editor scenario opens a window, so
-`pnpm canary -- --agent cursor` is run by hand, after a Cursor update, and rarely.
+`pnpm canary -- --agent cursor` is run by hand, after a Cursor update, and rarely. Copilot has
+none either, for the same reasons in AI credits: `pnpm canary -- --agent copilot` is run by
+hand, after a VS Code or Copilot CLI update, and rarely.
 
 When a run's numbers differ from the tables above, update this page in the same commit as
 whatever the difference forced, and bump the version file of that agent.

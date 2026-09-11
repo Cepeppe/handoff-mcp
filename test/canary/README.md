@@ -7,7 +7,8 @@ want the answers rather than the machinery.
 A canary is not a gate (TECHNICAL-DESIGN §11.1, DD-34). Everything that can be tested
 without a language model is a merge gate and lives in `test/unit`, `test/contract` and
 `test/integration`. What lives here needs a real agent — Claude Code, Codex since T-066,
-OpenCode since T-074 and Cursor since T-069 — real credentials and real money, so
+OpenCode since T-074, Cursor since T-069 and GitHub Copilot since T-072 — real credentials and
+real money, so
 `vitest.config.ts` excludes this directory outright: `pnpm test` never touches it and
 `pnpm canary` is the only way in.
 
@@ -39,7 +40,12 @@ pnpm canary -- observe               # one of them
    `~/.cursor/`. What it cannot do is leave a `~/.cursor/mcp.json` of the user's out, and none
    exists on the machine the facts were measured on. Cursor's editor is launched with a
    user-data folder and a home folder of its own, so the `~/.cursor/mcp.json` it reads is the
-   run's. `test/unit/canary/cursor.test.ts` pins them.
+   run's. `test/unit/canary/cursor.test.ts` pins them. The Copilot CLI is given a Copilot
+   folder of the run's own through `COPILOT_HOME` and a home folder of the run's own, so
+   neither the user's `mcp-config.json` nor a hook of the user's — the CLI reads Claude Code's
+   files as a source of hooks — meets a run, and `--allow-tool=handoff` is its one allowance;
+   VS Code is launched with a user-data, an extensions and a home folder of its own.
+   `test/unit/canary/copilot.test.ts` pins them.
 2. **`CLAUDECODE` is cleared for the child, always.** Claude Code refuses to run nested
    inside another Claude Code session, and this harness is normally started from one.
 3. **`HANDOFF_HOME` is a temporary folder, always.** The probe writes there, the token file
@@ -47,30 +53,35 @@ pnpm canary -- observe               # one of them
 
 ## The parts
 
-| File                             | What it is                                                                                   |
-| -------------------------------- | -------------------------------------------------------------------------------------------- |
-| `workspace.ts`                   | Pure: the MCP configuration, the project settings, the child environment, the command line   |
-| `runner.ts`                      | One Claude Code run: build the throw-away project, spawn `claude`, collect the three sources |
-| `classify.ts`                    | Protocol failure or model behaviour, and the single retry §11.5 allows                       |
-| `scenarios/`                     | The Claude Code scenarios, one file per group of assumptions                                 |
-| `hooks/record-stop.mjs`          | The recording Stop hook of A-05, A-06 and A-11                                               |
-| `agents/codex/workspace.ts`      | Pure: the `codex exec` command line, the `-c` overrides that declare our server, the env     |
-| `agents/codex/runner.ts`         | One Codex run: spawn `codex exec --json`, map its events onto the same `CanaryRun`           |
-| `agents/codex/app.ts`            | `test/fake-app`, bundled on the fly, for the scenario that needs an overlay listening        |
-| `agents/codex/*.ts`              | The Codex scenarios, and the checks they share (`scenario.ts`)                               |
-| `agents/opencode/workspace.ts`   | Pure: the `opencode run` command line, the inline configuration, the isolated environment    |
-| `agents/opencode/runner.ts`      | One OpenCode run: spawn `opencode run --format json`, map its events, delete the session     |
-| `agents/opencode/*.ts`           | The OpenCode scenarios; those that read nothing agent-specific reuse the Codex checks        |
-| `agents/cursor/workspace.ts`     | Pure: the project's `mcp.json`, `cli.json` and hooks, the `agent -p` command line, the env   |
-| `agents/cursor/runner.ts`        | One Cursor CLI run: spawn `agent -p` past its shim, map its stream-json, delete its state    |
-| `agents/cursor/editor-runner.ts` | One launch of Cursor's editor on a throw-away project, until the server registers            |
-| `agents/cursor/record-hook.mjs`  | The recording hook, declared as Cursor's `stop` and as Claude Code's `Stop`; never blocks    |
-| `agents/cursor/*.ts`             | The Cursor scenarios, a `surface` each: the editor's, or the CLI's                           |
-| `cli.ts`                         | Pure: the `--agent` / `--list` command line                                                  |
-| `main.ts`                        | `pnpm canary`: run, classify, retry once, report, write `results/last-run.json`              |
-| `last-claude-version`            | The Claude Code version the recorded facts were measured against; `canary.yml` diffs it      |
-| `last-codex-version`             | The same for Codex                                                                           |
-| `last-opencode-version`          | The same for OpenCode                                                                        |
+| File                              | What it is                                                                                    |
+| --------------------------------- | --------------------------------------------------------------------------------------------- |
+| `workspace.ts`                    | Pure: the MCP configuration, the project settings, the child environment, the command line    |
+| `runner.ts`                       | One Claude Code run: build the throw-away project, spawn `claude`, collect the three sources  |
+| `classify.ts`                     | Protocol failure or model behaviour, and the single retry §11.5 allows                        |
+| `scenarios/`                      | The Claude Code scenarios, one file per group of assumptions                                  |
+| `hooks/record-stop.mjs`           | The recording Stop hook of A-05, A-06 and A-11                                                |
+| `agents/codex/workspace.ts`       | Pure: the `codex exec` command line, the `-c` overrides that declare our server, the env      |
+| `agents/codex/runner.ts`          | One Codex run: spawn `codex exec --json`, map its events onto the same `CanaryRun`            |
+| `agents/codex/app.ts`             | `test/fake-app`, bundled on the fly, for the scenario that needs an overlay listening         |
+| `agents/codex/*.ts`               | The Codex scenarios, and the checks they share (`scenario.ts`)                                |
+| `agents/opencode/workspace.ts`    | Pure: the `opencode run` command line, the inline configuration, the isolated environment     |
+| `agents/opencode/runner.ts`       | One OpenCode run: spawn `opencode run --format json`, map its events, delete the session      |
+| `agents/opencode/*.ts`            | The OpenCode scenarios; those that read nothing agent-specific reuse the Codex checks         |
+| `agents/cursor/workspace.ts`      | Pure: the project's `mcp.json`, `cli.json` and hooks, the `agent -p` command line, the env    |
+| `agents/cursor/runner.ts`         | One Cursor CLI run: spawn `agent -p` past its shim, map its stream-json, delete its state     |
+| `agents/cursor/editor-runner.ts`  | One launch of Cursor's editor on a throw-away project, until the server registers             |
+| `agents/cursor/record-hook.mjs`   | The recording hook, declared as Cursor's `stop` and as Claude Code's `Stop`; never blocks     |
+| `agents/cursor/*.ts`              | The Cursor scenarios, a `surface` each: the editor's, or the CLI's                            |
+| `agents/copilot/workspace.ts`     | Pure: the run's Copilot folder and hooks, the `copilot -p` command line, the env              |
+| `agents/copilot/runner.ts`        | One Copilot CLI run: find the native CLI behind its shim, map its session events              |
+| `agents/copilot/editor-runner.ts` | One launch of VS Code with a starter extension that has it start the profile's servers        |
+| `agents/copilot/record-hook.mjs`  | The recording hook, declared as the CLI's own hooks and as Claude Code's `Stop`; never blocks |
+| `agents/copilot/*.ts`             | The Copilot scenarios, a `surface` each: VS Code's, or the CLI's                              |
+| `cli.ts`                          | Pure: the `--agent` / `--list` command line                                                   |
+| `main.ts`                         | `pnpm canary`: run, classify, retry once, report, write `results/last-run.json`               |
+| `last-claude-version`             | The Claude Code version the recorded facts were measured against; `canary.yml` diffs it       |
+| `last-codex-version`              | The same for Codex                                                                            |
+| `last-opencode-version`           | The same for OpenCode                                                                         |
 
 The deterministic half — the configuration shapes, the environment, the command lines, the
 event mapping, the classifier — is unit-tested in `test/unit/canary/`, and that is
@@ -90,9 +101,10 @@ it is a protocol failure or a model one:
   probe **inside the server** (`src/mcp/canary.ts`, active only under `HANDOFF_CANARY=1`).
   This is what the protocol did, and it does not depend on the model having behaved.
 - **the hook records** — `$HANDOFF_HOME/canary/hook.jsonl`, written by `record-stop.mjs`, or,
-  for Cursor, the run's `hooks.jsonl`, written by `agents/cursor/record-hook.mjs`. Codex runs
-  no hook under `codex exec`, OpenCode has none to declare, and under `agent -p` Cursor ran
-  neither of the two it was given, so those runs have none.
+  for Cursor and Copilot, the run's `hooks.jsonl`, written by the agent's own
+  `record-hook.mjs`. Codex runs no hook under `codex exec`, OpenCode has none to declare, and
+  under `agent -p` Cursor ran neither of the two it was given, so those runs have none; the
+  Copilot CLI ran its own three and the project's Claude Code `Stop`.
 
 The degraded-path scenarios of Codex, OpenCode and Cursor add a fourth: what the scripted
 overlay received, which is where the heartbeat's `handoff.detach_call` and every resume show
@@ -103,12 +115,13 @@ up. Cursor's editor scenario reads only that: the `hello` the server registered 
 Give it an id, the assumption ids it covers, the run options, a `check` that returns
 assertions and a `facts` that returns what was _measured_ — the two are not the same, and
 half of Appendix B is about the number rather than about the tick. Then add it to
-`scenarios/index.ts`, `agents/codex/index.ts`, `agents/opencode/index.ts` or
-`agents/cursor/index.ts`, cheapest first. A Codex scenario's id starts with `codex-`, an
-OpenCode one's with `opencode-`, a Cursor one's with `cursor-`, and a Cursor scenario also
-says which `surface` it runs: `cli` spends one of the account's requests, `editor` none.
+`scenarios/index.ts`, `agents/codex/index.ts`, `agents/opencode/index.ts`,
+`agents/cursor/index.ts` or `agents/copilot/index.ts`, cheapest first. A Codex scenario's id
+starts with `codex-`, an OpenCode one's with `opencode-`, a Cursor one's with `cursor-`, a
+Copilot one's with `copilot-`, and a Cursor or Copilot scenario also says which `surface` it
+runs: `cli` spends the account's requests or credits, `editor` none.
 
-Five things learnt the hard way and worth not re-learning:
+Seven things learnt the hard way and worth not re-learning:
 
 - **Do not tell the model what not to call.** In Claude Code 2.1.263 an MCP tool reaches the
   model through its own `ToolSearch` first, so "do not call any other tool" forbids the call
@@ -129,3 +142,11 @@ Five things learnt the hard way and worth not re-learning:
   busy free model answers "temporarily rate-limited upstream" before any tool is called. That
   run fails as a harness failure; it says nothing about OpenCode or the server, and running it
   again, or on another model, is the answer.
+- **The Copilot CLI does not wait for its servers under `-p`.** A cold server that connects a
+  moment after the tool list froze is a model that "cannot find the tool" (T-071). The runner
+  warms the bundle before every run, and every CLI scenario asserts that
+  `session.mcp_servers_loaded` said `connected` before it blames the model.
+- **VS Code starts no MCP server when a window opens.** Unlike Cursor's editor it waits for a
+  chat request, so the editor runner brings a two-file extension in development mode that runs
+  `workbench.mcp.startServer` with `{ autoTrustChanges: true }` — written into the run's
+  folder, not kept in the repository.
