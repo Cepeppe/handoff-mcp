@@ -189,6 +189,42 @@ problem. `--allow-tool=handoff` allows this server's tools and nothing else. Thi
 with VS Code 1.137.0 and the Copilot CLI 1.0.83 on Windows; see
 [measured agent facts](agent-facts.md#github-copilot).
 
+## Registering it in Kilo Code
+
+Kilo Code has two surfaces and one file. Its CLI (`kilo`) and its VS Code extension run the
+same program, and both read `kilo.json` in `~/.config/kilo/` — under `$XDG_CONFIG_HOME` when
+that is set, on Windows as elsewhere — with one entry per server under `mcp`, in OpenCode's
+shape:
+
+```json
+{
+  "mcp": {
+    "handoff": {
+      "type": "local",
+      "command": ["npx", "-y", "baton-handoff-mcp"],
+      "environment": { "HANDOFF_AGENT": "kilo-code" }
+    }
+  }
+}
+```
+
+The command and its arguments are **one array**, and the variables are `environment`, not
+`env`. A project's own `kilo.json`, or `.kilo/kilo.json`, takes the same entry and is merged
+over the global one, with no trust step. Write the entry into `kilo.json` even where you keep a
+`kilo.jsonc` beside it: Kilo reads and merges both. Kilo asks no approval before it calls an MCP
+tool, on either surface, so nothing else is needed, and `kilo mcp list` shows the entry once it
+is there. The model sees the tools as `handoff_handoff_to_user` and so on, as in OpenCode. Kilo
+also rewrites a configuration file when it loads it — it adds a `$schema` line and indents with
+two spaces — so expect to find the file reformatted.
+
+The CLI starts the server in the folder it runs in. The VS Code extension starts a `kilo serve`
+of its own for each window, when the Kilo panel is first opened, and that starts the server at
+the window's first task, in the window's workspace folder. Both hand the server their whole
+environment plus the entry's `environment`, so `USERDOMAIN` and `USERNAME` reach it on Windows.
+An overlay keys either kind of session on the server's parent — the CLI, or the window's
+`kilo serve` — so two VS Code windows are two sessions. This was measured with Kilo 7.6.2 on
+Windows; see [measured agent facts](agent-facts.md#kilo-code).
+
 Any other MCP client works the same way: a stdio server, one command, no arguments. What
 changes is the name and the shape of that client's configuration file.
 
@@ -208,8 +244,8 @@ step 1 you can silently land on `unknown`, which heartbeats every 50 seconds and
 images and no hook. Everything still works — that is what `base` support means — but you get
 the cautious version of it.
 
-The value is the agent id from the table: `claude-code`, `codex`, `cursor`, `copilot` and
-`opencode` today. `handoff-mcp doctor` prints the row it
+The value is the agent id from the table: `claude-code`, `codex`, `cursor`, `copilot`,
+`opencode` and `kilo-code` today. `handoff-mcp doctor` prints the row it
 resolved and whether it came from `HANDOFF_AGENT` or from the `unknown` row — it has no MCP
 handshake of its own, so it cannot show you step 2.
 
@@ -226,7 +262,10 @@ hit, the agent calls back with `resume`, and the loop continues for as long as t
   OpenCode it is `"timeout"` in the server's entry, in milliseconds again — and more worth
   setting than elsewhere, because with nothing configured OpenCode cuts a call after sixty
   seconds. In the Copilot CLI it is `"timeout"` in the entry of `mcp-config.json`, in
-  milliseconds (`copilot mcp add --timeout`); VS Code's `mcp.json` has no such field.
+  milliseconds (`copilot mcp add --timeout`); VS Code's `mcp.json` has no such field. In Kilo
+  Code it is OpenCode's `"timeout"`, in milliseconds, and just as worth setting: with nothing
+  configured Kilo too cuts a call after sixty seconds, on both of its surfaces, since they run
+  the same program. The OpenCode object below is Kilo's, with `kilo-code`.
 - **Cursor has none**, and nothing in its entry raises the limit: its CLI cuts a call after
   sixty seconds and its editor after two minutes without progress. Leave
   `HANDOFF_TOOL_TIMEOUT_MS` out of a Cursor entry as well, so that the server keeps its
@@ -300,7 +339,7 @@ subcommand begins.
 The hook never blocks on uncertainty: no overlay, a refused token, a malformed payload or an
 answer that comes too late all print nothing and exit 0.
 
-**Codex, OpenCode and Cursor have no hook to register.** Their rows say so, and the
+**Codex, OpenCode, Cursor and Kilo Code have no hook to register.** Their rows say so, and the
 instruction in every outcome then tells the agent that nothing will remind it and that it has
 to keep the handoff id itself — which is what `base` support means. No hook declared for
 `codex exec` ran in any of the places tried against Codex 0.153.4, and OpenCode 1.18.29 has
@@ -310,7 +349,9 @@ plugins rather than a command it runs at the end of a turn (see
 the payload Cursor hands a `stop` hook — its own, or a Claude Code `Stop` hook it runs as its
 own — carries no `stop_hook_active`, so `handoff-mcp hook stop` answers it with nothing. The
 hook above, installed for Claude Code, is therefore harmless when Cursor runs it (see
-[its Cursor section](agent-facts.md#cursor)).
+[its Cursor section](agent-facts.md#cursor)). Kilo Code, a fork of OpenCode, has plugins too
+and no command it runs at the end of a turn, in its CLI and in VS Code alike (see
+[its Kilo Code section](agent-facts.md#kilo-code)).
 
 **GitHub Copilot has none to register either**, although both of its surfaces run hooks. VS
 Code reads a Stop hook's decision from a field of its own, so a Claude Code-shaped answer is

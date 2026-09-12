@@ -61,6 +61,11 @@ describe('when it runs', () => {
     expect(workflow).toContain('the OpenCode canaries were skipped (T-074)');
   });
 
+  it('skips the Kilo Code job the same way when KILO_API_KEY is absent (T-081)', () => {
+    expect(workflow).toContain('KILO_API_KEY: ${{ secrets.KILO_API_KEY }}');
+    expect(workflow).toContain('the Kilo Code canaries were skipped (T-081)');
+  });
+
   it('keeps macOS opt-in and its label an input, never a literal (§0.4 item 7, T-009)', () => {
     expect(workflow).toContain('inputs.macos_runner');
     // A literal label anywhere but the default of the input is the trap T-009 hit.
@@ -87,6 +92,11 @@ describe('what it checks and reports', () => {
     expect(readFileSync(join(ROOT, 'test', 'canary', 'last-opencode-version'), 'utf8')).toMatch(
       /^\d+\.\d+\.\d+\n$/u,
     );
+    expect(workflow).toContain('npm view @kilocode/cli dist-tags.latest');
+    expect(workflow).toContain('test/canary/last-kilo-code-version');
+    expect(readFileSync(join(ROOT, 'test', 'canary', 'last-kilo-code-version'), 'utf8')).toMatch(
+      /^\d+\.\d+\.\d+\n$/u,
+    );
   });
 
   it('installs the versions it just resolved, rather than latest', () => {
@@ -99,15 +109,25 @@ describe('what it checks and reports', () => {
     expect(workflow).toContain(
       'npm install --global opencode-ai@${{ needs.plan.outputs.opencode_published }}',
     );
+    expect(workflow).toContain(
+      'npm install --global @kilocode/cli@${{ needs.plan.outputs.kilo_code_published }}',
+    );
   });
 
   it('hands OpenCode its key in the variable its provider reads, never on a command line', () => {
     // OpenCode's OpenRouter provider names OPENROUTER_API_KEY in its own catalogue, so the key
     // goes into the step's environment and no login command ever sees it.
-    const job = workflow.slice(workflow.indexOf('  opencode:'), workflow.indexOf('  issue:'));
+    const job = workflow.slice(workflow.indexOf('  opencode:'), workflow.indexOf('  kilo-code:'));
     expect(job).toContain('OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}');
     expect(job).toContain('HANDOFF_CANARY_OPENCODE_MODEL: ${{ inputs.opencode_model }}');
     expect(job).not.toMatch(/opencode (?:auth|providers) login/u);
+  });
+
+  it('hands Kilo Code its key in the variable Kilo reads, never on a command line (T-081)', () => {
+    const job = workflow.slice(workflow.indexOf('  kilo-code:'), workflow.indexOf('  issue:'));
+    expect(job).toContain('KILO_API_KEY: ${{ secrets.KILO_API_KEY }}');
+    expect(job).toContain('HANDOFF_CANARY_KILO_CODE_MODEL: ${{ inputs.kilo_code_model }}');
+    expect(job).not.toMatch(/kilo (?:auth|providers) login/u);
   });
 
   it('logs Codex in from stdin, so the key is never on a command line', () => {
@@ -120,17 +140,19 @@ describe('what it checks and reports', () => {
     expect(workflow).toContain('run: pnpm canary -- --agent claude-code');
     expect(workflow).toContain('run: pnpm canary -- --agent codex');
     expect(workflow).toContain('run: pnpm canary -- --agent opencode');
+    expect(workflow).toContain('run: pnpm canary -- --agent kilo-code');
   });
 
   it('keeps one report per agent and runner, so none overwrites another', () => {
     expect(workflow).toContain('name: canary-claude-code-${{ matrix.os }}');
     expect(workflow).toContain('name: canary-codex-${{ matrix.os }}');
     expect(workflow).toContain('name: canary-opencode-${{ matrix.os }}');
+    expect(workflow).toContain('name: canary-kilo-code-${{ matrix.os }}');
     expect(workflow).toContain('pattern: canary-*');
   });
 
   it('opens an issue only on a failure of any agent, and asks for the permission that needs', () => {
-    expect(workflow).toContain('needs: [plan, canary, codex, opencode]');
+    expect(workflow).toContain('needs: [plan, canary, codex, opencode, kilo-code]');
     expect(workflow).toContain('if: failure() && inputs.open_issue');
     expect(workflow).toContain('issues: write');
     expect(workflow).toContain('gh issue create');
@@ -213,6 +235,18 @@ describe('the report renderer', () => {
       'utf8',
     );
     expect(render(file)).toContain('opencode model `openrouter/vendor/model:free`');
+  });
+
+  it('names the Kilo Code model when Kilo Code scenarios ran, and only then (T-081)', () => {
+    const file = join(scratch(), 'last-run.json');
+    writeFileSync(file, JSON.stringify(report), 'utf8');
+    expect(render(file)).not.toContain('kilo-code model');
+    writeFileSync(
+      file,
+      JSON.stringify({ ...report, kilo_code_model: 'kilo/kilo-auto/free' }),
+      'utf8',
+    );
+    expect(render(file)).toContain('kilo-code model `kilo/kilo-auto/free`');
   });
 
   it('names the Codex model when Codex scenarios ran, and only then', () => {

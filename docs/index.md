@@ -89,11 +89,13 @@ which reads nothing else still behaves correctly. The rows that ship today:
 | `cursor`                | `base` | yes                    | no               | none                                   |
 | `copilot`               | `base` | yes                    | no               | `timeout`, in milliseconds (the CLI's) |
 | `opencode`              | `base` | yes                    | no               | `timeout`, in milliseconds             |
+| `kilo-code`             | `base` | yes                    | no               | `timeout`, in milliseconds             |
 | `unknown` (any other)   | `base` | no                     | no               | —                                      |
 
 Every value of a shipped row was measured against the real agent;
 [measured agent facts](agent-facts.md) says when, and against which version. `copilot` is
-GitHub Copilot on both of its surfaces, VS Code's chat and the Copilot CLI.
+GitHub Copilot on both of its surfaces, VS Code's chat and the Copilot CLI, and `kilo-code` is
+Kilo Code on both of its own, its CLI and its VS Code extension.
 
 One fact belongs to a session rather than to its agent: whether an editor started the server.
 A CLI agent starts it itself, and the overlay keys that session on the server's parent. An
@@ -103,7 +105,10 @@ the editor and on its workspace folder instead; the [channel](channel.md) carrie
 `session_identity`. The workspace folder is the one Cursor names in `WORKSPACE_FOLDER_PATHS`,
 or, where an editor names it in no variable, as VS Code does, the first of the roots its MCP
 client lists. Cursor's CLI and the Copilot CLI share their editor's row and are keyed on
-their parent like any other CLI agent.
+their parent like any other CLI agent. So is Kilo Code on both of its surfaces: its VS Code
+extension starts the server from a `kilo serve` of its own, one per window, and a process of
+another program between the server and the editor keeps the session on that parent, which is
+as precise as the editor and already has the window's folder as its working directory.
 
 Remote agents (an agent running in the cloud rather than on your machine) find no socket and
 get [text mode](text-mode.md) with no extra code. That works, and it is not supported: there

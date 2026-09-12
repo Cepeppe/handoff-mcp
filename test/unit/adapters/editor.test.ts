@@ -89,8 +89,12 @@ describe('a session that keeps the parent_pid key', () => {
   });
 
   it("is Kilo Code's extension, whose kilo serve sits between", () => {
+    // Measured against Kilo 7.6.2 (T-080): the server's parent is the extension's own
+    // `kilo.exe serve`, one per window, under the window's extension host, under the `Code.exe`
+    // `VSCODE_PID` names. That `kilo serve` is the key, as precise as the editor's (T-081).
     const chain = [{ pid: 9200, name: 'kilo.exe' }, { pid: 7100, name: 'Code.exe' }, CODE];
     expect(editorHost(chain, CODE.pid)).toBeUndefined();
+    expect(resolveSessionIdentity(chain, CODE.pid).kind).toBe(PARENT_PID_SESSION_IDENTITY);
   });
 
   it('is a server started through a launcher, which the rule cannot tell from a shell', () => {

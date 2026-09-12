@@ -42,10 +42,11 @@ Then register it as a stdio MCP server. In Claude Code, one entry in `~/.claude.
 
 `HANDOFF_AGENT` is worth setting: it tells the server which agent it is talking to, and
 therefore how long a call may block and what the results may contain. Codex takes the same
-server as a table in `~/.codex/config.toml`, with `HANDOFF_AGENT` set to `codex`, and
-OpenCode as an entry under `mcp` in `~/.config/opencode/opencode.json`, with `opencode`. The
-full route for all three, the optional timeout and hook settings, and what `doctor` should
-print are in [Installing the server on its own](docs/install-without-app.md).
+server as a table in `~/.codex/config.toml`, with `HANDOFF_AGENT` set to `codex`,
+OpenCode as an entry under `mcp` in `~/.config/opencode/opencode.json`, with `opencode`, and
+Kilo Code as the same entry in `~/.config/kilo/kilo.json`, with `kilo-code`. The full route for
+every agent, the optional timeout and hook settings, and what `doctor` should print are in
+[Installing the server on its own](docs/install-without-app.md).
 
 > Until the first real release is published, the registry holds a placeholder that reserves
 > the name. Build from a checkout instead: `pnpm install && pnpm build`, then point your

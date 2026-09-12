@@ -40,7 +40,7 @@
     "session_ref": { "type": "string", "pattern": "^ses_[0-9a-hjkmnp-tv-z]{8}$" },
     "call_id": { "type": "string", "pattern": "^call_[0-9a-hjkmnp-tv-z]{8}$" },
     "agent_id": {
-      "description": "The capability-table key resolved for this session (§5.6): claude-code, codex, cursor, copilot, opencode, unknown. Not an enum, so a new adapter does not bump the protocol.",
+      "description": "The capability-table key resolved for this session (§5.6): claude-code, codex, cursor, copilot, opencode, kilo-code, unknown. Not an enum, so a new adapter does not bump the protocol.",
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
     },

@@ -139,7 +139,9 @@ export interface CanaryRun {
   readonly app?: AppTranscript;
   /**
    * The process the harness launched itself, when a scenario starts the agent's host rather
-   * than the agent (T-069: Cursor's editor, whose process its servers must name in their chain).
+   * than the agent (T-069: Cursor's editor, whose process its servers must name in their chain),
+   * or when the server's parent must be that very process (T-081: Kilo's native CLI, which the
+   * harness starts past its npm launcher).
    */
   readonly launched?: { readonly pid: number };
   readonly exitCode: number | null;

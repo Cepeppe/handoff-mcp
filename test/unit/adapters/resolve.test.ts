@@ -170,6 +170,24 @@ describe('null fields fall back to the unknown row', () => {
     expect(opencode.heartbeat_after_ms).toBe(unknown.heartbeat_after_ms);
   });
 
+  it('keeps every value the kilo-code row measured, its 60 s default included (T-081)', () => {
+    const kilo = resolveCapabilityRow({ agent: 'kilo-code' });
+    expect(kilo.display_name).toBe('Kilo Code');
+    expect(kilo.status).toBe('supported');
+    expect(kilo.support).toBe('base');
+    expect(kilo.stop_hook).toBe(false);
+    expect(kilo.subagent_stop_hook).toBe(false);
+    expect(kilo.user_request_delivery).toEqual(['clipboard_focus']);
+    expect(kilo.images_in_results).toBe(true);
+    expect(kilo.cancellation_notifications).toBe(true);
+    expect(kilo.per_server_timeout_field).toBe('timeout');
+    expect(kilo.tool_timeout_ms_default).toBe(60_000);
+    expect(kilo.session_identity).toBe('ancestor_chain:editor');
+    expect(kilo.heartbeat_after_ms).toBe(unknown.heartbeat_after_ms);
+    // An entry written by hand with no HANDOFF_AGENT still finds the row from either surface.
+    expect(resolveCapabilityRow({ clientName: 'kilo' }).agent_id).toBe('kilo-code');
+  });
+
   it('keeps every value a supported row measured', () => {
     const claude = resolveCapabilityRow({ agent: 'claude-code' });
     expect(claude.images_in_results).toBe(true);

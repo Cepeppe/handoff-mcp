@@ -42,6 +42,9 @@ const models =
   (typeof report.codex_model === 'string' ? ` · codex model \`${report.codex_model}\`` : '') +
   (typeof report.opencode_model === 'string'
     ? ` · opencode model \`${report.opencode_model}\``
+    : '') +
+  (typeof report.kilo_code_model === 'string'
+    ? ` · kilo-code model \`${report.kilo_code_model}\``
     : '');
 say(
   `**${report.scenarios.length - failed.length}/${report.scenarios.length} scenarios passed** ` +

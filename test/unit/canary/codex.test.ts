@@ -284,9 +284,16 @@ describe('the pnpm canary command line', () => {
   });
 
   it('refuses an agent it cannot run, rather than running nothing', () => {
-    expect(parseCanaryArguments(['--agent', 'kilo-code']).error).toContain('kilo-code');
+    expect(parseCanaryArguments(['--agent', 'gemini-cli']).error).toContain('gemini-cli');
     expect(parseCanaryArguments(['--agent']).error).toBeDefined();
-    expect(CANARY_AGENTS).toEqual(['claude-code', 'codex', 'opencode', 'cursor', 'copilot']);
+    expect(CANARY_AGENTS).toEqual([
+      'claude-code',
+      'codex',
+      'opencode',
+      'cursor',
+      'copilot',
+      'kilo-code',
+    ]);
   });
 });
 

@@ -88,6 +88,11 @@ export const CANARY_OBSERVATIONS_FILE = 'observations.jsonl';
  * `WORKSPACE_FOLDER_PATHS` and `VSCODE_PID` are what an editor tells the servers its
  * extension host starts (T-069): where the workspace is, and which process the editor is.
  * They decide the project folder and the session identity of a session an editor started.
+ *
+ * `KILO_CLIENT`, `KILO_PARENT_PID` and `KILO_PLATFORM` are what Kilo Code's VS Code extension
+ * gives the `kilo serve` it starts, and that server hands on to ours (T-080): the one surface of
+ * Kilo whose servers an editor hosts says so in them, and the CLI's do not. They are recorded
+ * before anything relies on them (T-081).
  */
 export const CANARY_PROBE_ENV_NAMES: readonly string[] = [
   'HANDOFF_AGENT',
@@ -101,6 +106,9 @@ export const CANARY_PROBE_ENV_NAMES: readonly string[] = [
   'USERNAME',
   'WORKSPACE_FOLDER_PATHS',
   'VSCODE_PID',
+  'KILO_CLIENT',
+  'KILO_PARENT_PID',
+  'KILO_PLATFORM',
 ];
 
 /** The longest sleep the probe will honour: past this it is a hung session, not a probe. */

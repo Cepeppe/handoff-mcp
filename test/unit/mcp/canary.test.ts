@@ -127,6 +127,17 @@ describe('the names the probe asks about (A-02, A-23, A-24)', () => {
       expect(ENV_VAR_NAMES as readonly string[]).toContain(name);
     }
   });
+
+  it("include what Kilo Code's editor surface hands on, recorded before it is relied on", () => {
+    // T-080 saw these reach a server of the VS Code extension's `kilo serve`, and not one of
+    // the CLI's (T-081). The server reads none of them: they are observations only.
+    for (const name of ['KILO_CLIENT', 'KILO_PARENT_PID', 'KILO_PLATFORM', 'VSCODE_PID']) {
+      expect(CANARY_PROBE_ENV_NAMES).toContain(name);
+    }
+    for (const name of ['KILO_CLIENT', 'KILO_PARENT_PID', 'KILO_PLATFORM']) {
+      expect(ENV_VAR_NAMES as readonly string[]).not.toContain(name);
+    }
+  });
 });
 
 describe('the tools the probe adds', () => {

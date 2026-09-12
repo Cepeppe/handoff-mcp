@@ -59,8 +59,11 @@ const validateTable: ValidateFunction = ajv.compile(
 const validateHelloRow = ajv.getSchema(`${CHANNEL_ID}#/$defs/capability_row`);
 if (!validateHelloRow) throw new Error('capability_row is not defined in the channel schema');
 
-/** The agent ids of §5.6, in the committed adapter order of ADPT-06, `unknown` last. */
-const AGENT_IDS = ['claude-code', 'codex', 'cursor', 'copilot', 'opencode', 'unknown'];
+/**
+ * The agent ids of §5.6, in the committed adapter order of ADPT-06, then Kilo Code, the fifth
+ * agent (T-081, the `DEVIATIONS.md` entry of 2026-09-11), `unknown` last.
+ */
+const AGENT_IDS = ['claude-code', 'codex', 'cursor', 'copilot', 'opencode', 'kilo-code', 'unknown'];
 
 describe('capabilities.json', () => {
   it('validates against capabilities.schema.json', () => {
@@ -75,7 +78,7 @@ describe('capabilities.json', () => {
     expect(file.rows).toEqual(CAPABILITY_TABLE);
   });
 
-  it('carries the six rows of §5.6 in the committed order', () => {
+  it("carries the six rows of §5.6 and Kilo Code's, in the committed order", () => {
     expect(CAPABILITY_TABLE.map((row) => row.agent_id)).toEqual(AGENT_IDS);
   });
 
@@ -212,15 +215,17 @@ describe('capabilities.json', () => {
     // `claude-code` is what Claude Code 2.1.263 sends in the `initialize` handshake (measured
     // on 2026-09-08), `codex-mcp-client` what Codex 0.153.4 sends (2026-09-10), `opencode`
     // what OpenCode 1.18.29 sends (2026-09-11), Cursor's editor sends `cursor-vscode` and its
-    // CLI `Cursor` (3.20.10 and 2026.09.10-fd3934a, 2026-09-11), and VS Code sends
+    // CLI `Cursor` (3.20.10 and 2026.09.10-fd3934a, 2026-09-11), VS Code sends
     // `Visual Studio Code` and the GitHub Copilot CLI `copilot-cli` (1.137.0 and 1.0.83,
-    // 2026-09-11), all by `test/canary` and written down in `docs/agent-facts.md`.
+    // 2026-09-11), and Kilo Code sends `kilo` from both of its surfaces (7.6.2, 2026-09-12), all
+    // by `test/canary` and written down in `docs/agent-facts.md`.
     const measured: Readonly<Record<string, readonly string[]>> = {
       'claude-code': ['claude-code'],
       codex: ['codex-mcp-client'],
       cursor: ['cursor-vscode', 'Cursor'],
       copilot: ['Visual Studio Code', 'copilot-cli'],
       opencode: ['opencode'],
+      'kilo-code': ['kilo'],
     };
     for (const row of CAPABILITY_TABLE) {
       expect(row.match.client_names, row.agent_id).toEqual(measured[row.agent_id] ?? []);
@@ -253,6 +258,31 @@ describe('capabilities.json', () => {
     });
   });
 
+  it('states the kilo-code row as the T-081 canary measured it', () => {
+    // Kilo 7.6.2, 2026-09-12, `test/canary/agents/kilo-code` and `docs/agent-facts.md`: both
+    // surfaces send `kilo`; the CLI, a fork of OpenCode, honours the entry's `timeout` in
+    // milliseconds, cancels a call it cuts, and cuts one at the MCP SDK's 60 s when nothing is
+    // configured; images reach a model that reads them; and there is no end-of-turn hook. The
+    // row names the editor surface; each session resolves its own, and Kilo's resolve
+    // `parent_pid` on both surfaces (`src/adapters/editor.ts`: a `kilo serve` sits between).
+    expect(CAPABILITY_TABLE.find((row) => row.agent_id === 'kilo-code')).toEqual({
+      agent_id: 'kilo-code',
+      display_name: 'Kilo Code',
+      status: 'supported',
+      support: 'base',
+      match: { env: 'kilo-code', client_names: ['kilo'] },
+      tool_timeout_ms_default: 60000,
+      per_server_timeout_field: 'timeout',
+      images_in_results: true,
+      stop_hook: false,
+      subagent_stop_hook: false,
+      session_identity: 'ancestor_chain:editor',
+      user_request_delivery: ['clipboard_focus'],
+      cancellation_notifications: true,
+      heartbeat_after_ms: null,
+    });
+  });
+
   it('keeps each measured client name resolving to its own row without HANDOFF_AGENT', () => {
     // The point of measuring it (§5.6 step 2): an npm user who wrote the MCP entry by hand
     // gets the agent's row instead of `unknown`.
@@ -263,6 +293,7 @@ describe('capabilities.json', () => {
     expect(resolveRow({ clientName: 'Cursor' }).agent_id).toBe('cursor');
     expect(resolveRow({ clientName: 'Visual Studio Code' }).agent_id).toBe('copilot');
     expect(resolveRow({ clientName: 'copilot-cli' }).agent_id).toBe('copilot');
+    expect(resolveRow({ clientName: 'kilo' }).agent_id).toBe('kilo-code');
   });
 
   it('keys the editor-hosted agents on the ancestor chain (ADPT-02, R-12)', () => {
@@ -275,6 +306,7 @@ describe('capabilities.json', () => {
       cursor: 'ancestor_chain:editor',
       copilot: 'ancestor_chain:editor',
       opencode: 'parent_pid',
+      'kilo-code': 'ancestor_chain:editor',
       unknown: 'parent_pid',
     });
   });

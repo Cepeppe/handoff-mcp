@@ -9,6 +9,37 @@ schema version, which is independent of the package version.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-09-12
+
+Kilo Code is the sixth agent in the capability table, on both of its surfaces — its CLI and its
+VS Code extension, which run the same program — measured against Kilo 7.6.2 rather than
+assumed. It is supported at `base` level, like OpenCode, whose fork its CLI is: images reach a
+model that reads them, the entry's `timeout` is honoured in milliseconds and a call it cuts is
+cancelled, a call with nothing configured is cut at sixty seconds, and there is no end-of-turn
+hook. Neither surface needs code of its own: the VS Code extension starts this server from a
+`kilo serve` of its own, one per window, so its sessions are keyed on that process, as a CLI
+agent's are on the CLI. The public formats and the channel definition are unchanged since
+`0.1.0`.
+
+### Added
+
+- The `kilo-code` row of the capability table is `supported`, with the values measured on
+  2026-09-12: `clientInfo.name` `kilo` from both surfaces, images in tool results, the
+  per-server field `timeout` (in milliseconds), an MCP cancellation when a call is cut, and a
+  default timeout of 60 000 ms. An entry written by hand with no `HANDOFF_AGENT` now resolves
+  to the Kilo Code row.
+- The canary probe records whether `KILO_CLIENT`, `KILO_PARENT_PID` and `KILO_PLATFORM` reach
+  the server: the variables Kilo's VS Code extension hands on and its CLI does not. The server
+  reads none of them.
+- Kilo Code canary scenarios in `test/canary/agents/kilo-code/`: what the server sees of a CLI
+  session, its parent included; images; E2E-8 in text mode; the per-server and the default
+  timeout; the degraded path. `pnpm canary -- --agent kilo-code` runs them on free models of
+  the Kilo Gateway, and `canary.yml` gains a `kilo-code` job that skips without
+  `KILO_API_KEY`.
+- Documentation: registering the server in Kilo Code (`docs/install-without-app.md`), its row in
+  the support-level table (`docs/index.md`), and what was measured against both surfaces
+  (`docs/agent-facts.md`).
+
 ## [1.6.0] - 2026-09-11
 
 GitHub Copilot is the fifth agent in the capability table, on both of its surfaces — VS Code's

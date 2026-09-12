@@ -8,9 +8,9 @@
 # not one afternoon, and each agent's job **skips gracefully** rather than failing when its
 # secret is absent — a red run that only means "no key" teaches nobody anything.
 #
-# Three agents, three jobs, three credentials: Claude Code runs on `ANTHROPIC_API_KEY`, Codex
-# (T-066) on `OPENAI_API_KEY`, OpenCode (T-074) on `OPENROUTER_API_KEY`, and each job runs
-# only its own agent's scenarios.
+# Four agents, four jobs, four credentials: Claude Code runs on `ANTHROPIC_API_KEY`, Codex
+# (T-066) on `OPENAI_API_KEY`, OpenCode (T-074) on `OPENROUTER_API_KEY`, Kilo Code (T-081) on
+# `KILO_API_KEY`, and each job runs only its own agent's scenarios.
 #
 # This repository runs the canaries the server can run alone. Everything that needs the
 # overlay — E2E-1..7, 9..11 — lives in `handoff-app`'s own canary workflow.
@@ -39,6 +39,10 @@ on:
         description: 'Model to run the OpenCode canaries against'
         type: string
         default: openrouter/thinkingmachines/inkling-small:free
+      kilo_code_model:
+        description: 'Model to run the Kilo Code canaries against (the image scenario keeps its own)'
+        type: string
+        default: kilo/kilo-auto/free
       open_issue:
         description: 'Open an issue when a scenario fails'
         type: boolean
@@ -74,6 +78,8 @@ jobs:
       codex_pinned: ${{ steps.codex.outputs.pinned }}
       opencode_published: ${{ steps.opencode.outputs.published }}
       opencode_pinned: ${{ steps.opencode.outputs.pinned }}
+      kilo_code_published: ${{ steps.kilo_code.outputs.published }}
+      kilo_code_pinned: ${{ steps.kilo_code.outputs.pinned }}
       runners: ${{ steps.runners.outputs.list }}
     steps:
       - uses: actions/checkout@v4
@@ -117,6 +123,19 @@ jobs:
             echo "OpenCode is still \`$pinned\`." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "OpenCode moved from \`$pinned\` to \`$published\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - id: kilo_code
+        shell: bash
+        run: |
+          published="$(npm view @kilocode/cli dist-tags.latest)"
+          pinned="$(tr -d '[:space:]' < test/canary/last-kilo-code-version)"
+          echo "published=$published" >> "$GITHUB_OUTPUT"
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          if [ "$published" = "$pinned" ]; then
+            echo "Kilo Code is still \`$pinned\`." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Kilo Code moved from \`$pinned\` to \`$published\`." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - id: runners
@@ -335,12 +354,81 @@ jobs:
           path: test/canary/results/last-run.json
           if-no-files-found: ignore
 
+  # The same shape for Kilo Code (T-081), whose CLI is published as `@kilocode/cli`. The Kilo
+  # Gateway, the provider the canaries run on (free models, T-080), reads `KILO_API_KEY` from the
+  # environment, one of the names Kilo's own binary declares, so the key goes into the step's
+  # environment and no login command ever sees it. The harness itself isolates every run from
+  # the user's Kilo configuration, starts the native binary past the npm launcher, and deletes
+  # the session a run leaves behind. The VS Code surface is not run here: no script can type a
+  # task into its panel.
+  kilo-code:
+    name: Kilo Code · ${{ matrix.os }}
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.plan.outputs.runners) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - id: secret
+        shell: bash
+        env:
+          KILO_API_KEY: ${{ secrets.KILO_API_KEY }}
+        run: |
+          if [ -z "${KILO_API_KEY:-}" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "KILO_API_KEY is not configured: the Kilo Code canaries were skipped (T-081)." \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.secret.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - if: steps.secret.outputs.present == 'true'
+        run: pnpm build
+
+      - name: Install the published Kilo CLI
+        if: steps.secret.outputs.present == 'true'
+        run: npm install --global @kilocode/cli@${{ needs.plan.outputs.kilo_code_published }}
+
+      - name: Run the Kilo Code canaries
+        if: steps.secret.outputs.present == 'true'
+        shell: bash
+        env:
+          KILO_API_KEY: ${{ secrets.KILO_API_KEY }}
+          HANDOFF_CANARY_KILO_CODE_MODEL: ${{ inputs.kilo_code_model }}
+        run: pnpm canary -- --agent kilo-code
+
+      - name: Report
+        if: always() && steps.secret.outputs.present == 'true'
+        shell: bash
+        run: node build/canary-report.mjs >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the report
+        if: always() && steps.secret.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: canary-kilo-code-${{ matrix.os }}
+          path: test/canary/results/last-run.json
+          if-no-files-found: ignore
+
   # The point of a release watch is to be told. The issue names the versions and the failing
   # assertions; the transcript is not in it, because a transcript is a conversation and this
   # repository is public.
   issue:
     name: Open an issue for the failing assertions
-    needs: [plan, canary, codex, opencode]
+    needs: [plan, canary, codex, opencode, kilo-code]
     if: failure() && inputs.open_issue
     runs-on: ubuntu-latest
     permissions:
@@ -364,12 +452,15 @@ jobs:
           CODEX_PINNED: ${{ needs.plan.outputs.codex_pinned }}
           OPENCODE_PUBLISHED: ${{ needs.plan.outputs.opencode_published }}
           OPENCODE_PINNED: ${{ needs.plan.outputs.opencode_pinned }}
+          KILO_CODE_PUBLISHED: ${{ needs.plan.outputs.kilo_code_published }}
+          KILO_CODE_PINNED: ${{ needs.plan.outputs.kilo_code_pinned }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           {
             echo "Claude Code \`$PUBLISHED\` (pinned in \`test/canary/last-claude-version\`: \`$PINNED\`)."
             echo "Codex \`$CODEX_PUBLISHED\` (pinned in \`test/canary/last-codex-version\`: \`$CODEX_PINNED\`)."
             echo "OpenCode \`$OPENCODE_PUBLISHED\` (pinned in \`test/canary/last-opencode-version\`: \`$OPENCODE_PINNED\`)."
+            echo "Kilo Code \`$KILO_CODE_PUBLISHED\` (pinned in \`test/canary/last-kilo-code-version\`: \`$KILO_CODE_PINNED\`)."
             echo
             echo "Run: $RUN_URL"
             echo
@@ -386,5 +477,5 @@ jobs:
             fi
           } > body.md
           gh issue create \
-            --title "Canary: assumptions failing against Claude Code $PUBLISHED, Codex $CODEX_PUBLISHED or OpenCode $OPENCODE_PUBLISHED" \
+            --title "Canary: assumptions failing against Claude Code $PUBLISHED, Codex $CODEX_PUBLISHED, OpenCode $OPENCODE_PUBLISHED or Kilo Code $KILO_CODE_PUBLISHED" \
             --body-file body.md
