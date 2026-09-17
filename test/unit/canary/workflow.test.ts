@@ -1,5 +1,5 @@
 /**
- * Guards `canary.yml` (T-023, T-066, TECHNICAL-DESIGN §11.5, `TASKS.md` §0.4 items 3, 7
+ * Guards `canary.yml` (T-023, T-066, TECHNICAL-DESIGN §11.5, implementation decisions 3, 7
  * and 9).
  *
  * The workflow is read as text, the way `test/unit/release.test.ts` reads the release
@@ -38,7 +38,7 @@ function scratch(): string {
 }
 
 describe('when it runs', () => {
-  it('is dispatch-only while no secret is provisioned (§0.4 item 9)', () => {
+  it('is dispatch-only while no secret is provisioned (implementation decision 9)', () => {
     expect(workflow).toContain('workflow_dispatch:');
     expect(workflow).not.toMatch(/^\s{2}schedule:/mu);
     expect(workflow).not.toMatch(/^\s{2}push:/mu);
@@ -66,7 +66,7 @@ describe('when it runs', () => {
     expect(workflow).toContain('the Kilo Code canaries were skipped (T-081)');
   });
 
-  it('keeps macOS opt-in and its label an input, never a literal (§0.4 item 7, T-009)', () => {
+  it('keeps macOS opt-in and its label an input, never a literal (implementation decision 7, T-009)', () => {
     expect(workflow).toContain('inputs.macos_runner');
     // A literal label anywhere but the default of the input is the trap T-009 hit.
     expect(workflow).not.toMatch(/runs-on:\s*macos-/u);

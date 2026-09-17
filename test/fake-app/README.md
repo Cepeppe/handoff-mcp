@@ -23,7 +23,7 @@ await app.stop(); // stops listening, drops every connection, removes the tempor
 ```
 
 `FakeApp.start()` creates a private `HANDOFF_HOME` under the temporary folder, so a test can
-never meet the app the owner is actually running (`TASKS.md` §0.4 item 4). Pass `home` to use
+never meet the app the owner is actually running (implementation decision 4). Pass `home` to use
 your own, `token` to choose the token, `helloTimeoutMs` to shorten the two-second budget of
 §6.2, and `refuse` to make every `hello` fail with `auth_failed` or `protocol_unsupported`.
 

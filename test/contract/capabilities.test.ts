@@ -61,7 +61,7 @@ if (!validateHelloRow) throw new Error('capability_row is not defined in the cha
 
 /**
  * The agent ids of §5.6, in the committed adapter order of ADPT-06, then Kilo Code, the fifth
- * agent (T-081, the `DEVIATIONS.md` entry of 2026-09-11), `unknown` last.
+ * agent (T-081, implementation decision 13), `unknown` last.
  */
 const AGENT_IDS = ['claude-code', 'codex', 'cursor', 'copilot', 'opencode', 'kilo-code', 'unknown'];
 

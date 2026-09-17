@@ -213,15 +213,15 @@ describe('reading is pure', () => {
 
 describe('the Windows identity the pipe is named after', () => {
   it('is USERDOMAIN\\USERNAME in lower case (§5.8, DD-26)', () => {
-    expect(windowsUserKey({ USERDOMAIN: 'ACME', USERNAME: 'Giuse' })).toBe('acme\\giuse');
+    expect(windowsUserKey({ USERDOMAIN: 'ACME', USERNAME: 'Alice' })).toBe('acme\\alice');
   });
 
   it('lets a variable that is not set contribute an empty string, never a substitute', () => {
     // The app derives the same name from the same two variables; a fallback taken from
     // somewhere else on one side would move the endpoint out from under the other.
     expect(windowsUserKey({})).toBe('\\');
-    expect(windowsUserKey({ USERNAME: 'Giuse' })).toBe('\\giuse');
-    expect(windowsUserKey({ USERDOMAIN: '  ', USERNAME: 'giuse' })).toBe('\\giuse');
+    expect(windowsUserKey({ USERNAME: 'Alice' })).toBe('\\alice');
+    expect(windowsUserKey({ USERDOMAIN: '  ', USERNAME: 'alice' })).toBe('\\alice');
   });
 });
 

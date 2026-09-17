@@ -478,7 +478,7 @@ describe('what the client puts on the wire', () => {
 
   /**
    * The five application errors are numbered in `protocol/channel/README.md` and nowhere
-   * else (`DEVIATIONS.md`, T-007), and the pipeline maps them to the catalogue of §4.7.5 by
+   * else (T-007), and the pipeline maps them to the catalogue of §4.7.5 by
    * **code alone**. A constant that drifted from the table would silently turn one refusal
    * into another — a `final` read as a `not_found` — so the table is parsed and compared.
    */
@@ -499,7 +499,7 @@ describe('what the client puts on the wire', () => {
 
   /**
    * The screenshot the user sent travels **beside** the outcome, because the published
-   * outcome schema is closed and carries no pixels (§6.6, `DEVIATIONS.md`, T-020). It is
+   * outcome schema is closed and carries no pixels (§6.6, T-020). It is
    * optional on both messages that can carry a screenshot outcome, and it is a string.
    */
   it('carries an optional image beside the outcome of an event and of a resume', () => {

@@ -19,7 +19,7 @@
  *   line goes through the same check and a failure lands in `violations` rather than on the
  *   wire unnoticed.
  * - **It listens on the real endpoint**, a named pipe on Windows and a Unix socket
- *   elsewhere, under a `HANDOFF_HOME` of its own (§0.4 item 4 of `TASKS.md`) so it can never
+ *   elsewhere, under a `HANDOFF_HOME` of its own (implementation decision 4) so it can never
  *   meet the app the owner is actually running. `env` is what the peer must be given for
  *   the two sides to derive the same name.
  *
@@ -181,7 +181,7 @@ export class FakeApp {
   readonly home: string;
   readonly token: string;
   readonly endpoint: Endpoint;
-  /** What a peer must be given so that it derives this same endpoint (§0.4 item 4). */
+  /** What a peer must be given so that it derives this same endpoint (implementation decision 4). */
   readonly env: EnvRecord;
 
   private constructor(options: FakeAppOptions, home: string, ownsHome: boolean, server: Server) {

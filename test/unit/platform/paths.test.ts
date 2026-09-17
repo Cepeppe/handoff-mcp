@@ -30,14 +30,14 @@ const HOME = '/tmp/handoff-test';
 const WINDOWS_HOME = 'C:\\tmp\\hh';
 
 /** A Windows user, as the two variables the pipe name is derived from carry it. */
-const WINDOWS_USER = { USERDOMAIN: 'ACME', USERNAME: 'Giuse' } as const;
+const WINDOWS_USER = { USERDOMAIN: 'ACME', USERNAME: 'Alice' } as const;
 
-/** sha256("acme\giuse"), first 16 hex digits. */
-const PIPE_HASH = '8fb9ebc1757c4335';
-/** sha256("acme\giuse|/tmp/handoff-test"). */
-const PIPE_HASH_WITH_HOME = '020dcfd9686704a6';
-/** sha256("acme\giuse|C:\tmp\hh"). */
-const PIPE_HASH_WITH_WINDOWS_HOME = '70e80b37886e24a4';
+/** sha256("acme\alice"), first 16 hex digits. */
+const PIPE_HASH = '367c2964b2feb41a';
+/** sha256("acme\alice|/tmp/handoff-test"). */
+const PIPE_HASH_WITH_HOME = '4ac5f1cdb665b4c9';
+/** sha256("acme\alice|C:\tmp\hh"). */
+const PIPE_HASH_WITH_WINDOWS_HOME = '0296fa15bf7a583f';
 
 describe('the folder', () => {
   it('is HANDOFF_HOME when it is set', () => {
@@ -55,12 +55,12 @@ describe('the folder', () => {
 
 describe('the named pipe', () => {
   it('is derived from the lower-cased USERDOMAIN\\USERNAME', () => {
-    expect(pipeSuffix('acme\\giuse', undefined)).toBe(PIPE_HASH);
+    expect(pipeSuffix('acme\\alice', undefined)).toBe(PIPE_HASH);
     expect(pipeName(WINDOWS_USER)).toBe(`${PIPE_PREFIX}${PIPE_HASH}`);
   });
 
   it('mixes HANDOFF_HOME in when it is set, so a test instance has its own pipe', () => {
-    expect(pipeSuffix('acme\\giuse', HOME)).toBe(PIPE_HASH_WITH_HOME);
+    expect(pipeSuffix('acme\\alice', HOME)).toBe(PIPE_HASH_WITH_HOME);
     expect(pipeName({ ...WINDOWS_USER, HANDOFF_HOME: HOME })).toBe(
       `${PIPE_PREFIX}${PIPE_HASH_WITH_HOME}`,
     );
@@ -70,7 +70,7 @@ describe('the named pipe', () => {
   });
 
   it('is the same pipe whatever case the variables carry', () => {
-    expect(pipeName({ USERDOMAIN: 'acme', USERNAME: 'giuse' })).toBe(pipeName(WINDOWS_USER));
+    expect(pipeName({ USERDOMAIN: 'acme', USERNAME: 'alice' })).toBe(pipeName(WINDOWS_USER));
   });
 
   it('is a different pipe for a different user, which is what it is for', () => {
@@ -78,7 +78,7 @@ describe('the named pipe', () => {
   });
 
   it('takes sixteen hex digits and no more', () => {
-    expect(pipeSuffix('acme\\giuse', undefined)).toMatch(/^[0-9a-f]{16}$/u);
+    expect(pipeSuffix('acme\\alice', undefined)).toMatch(/^[0-9a-f]{16}$/u);
   });
 });
 

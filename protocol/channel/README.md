@@ -121,7 +121,7 @@ can carry a screenshot outcome: `handoff.event` and the snapshot of `handoff.res
 screenshot queued while no call was attached). It is absent whenever
 `screenshot.mode` is not `image`; the server attaches it as the MCP `content[1]` image
 block only when the session's `images_in_results` is true, and holds it in memory only for
-the duration of that tool result (§6.6, §4.7.4). See `DEVIATIONS.md` at the workspace root.
+the duration of that tool result (§6.6, §4.7.4).
 
 ## Errors
 
@@ -192,7 +192,7 @@ Details worth knowing before writing a codec:
   agent also writes on the hook's stdin, is deliberately not forwarded.
 - **`session_ref` in `handoff.resume`** is optional. The methods table does not list it and
   the calls section does; the connection already identifies the session, so a peer may send
-  it and the app may ignore it. See `DEVIATIONS.md` at the workspace root.
+  it and the app may ignore it.
 - **`params` is always present**, as `{}` when a method takes none.
 - **Ids** are positive integers, increasing per connection and per peer, so the two peers may
   reuse the same numbers in opposite directions. Strings are accepted for JSON-RPC

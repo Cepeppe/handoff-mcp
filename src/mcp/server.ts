@@ -198,7 +198,7 @@ export function toolDefinitions(extra: readonly Tool[] = []): Tool[] {
  * What the app's refusal means to the agent (§6.3 → §4.7.5).
  *
  * The mapping rests on the JSON-RPC **code** alone, which is why the five application errors
- * were numbered at all (`protocol/channel/README.md`, `DEVIATIONS.md`). `unknown_value_key`
+ * were numbered at all (`protocol/channel/README.md`). `unknown_value_key`
  * is the one that is not a catalogue code of its own: it is the app performing S3 on
  * `replacement_steps` with the value keys only it holds, so it comes back as the
  * `SPEC_INVALID` that same rule produces here, one problem per key it named.

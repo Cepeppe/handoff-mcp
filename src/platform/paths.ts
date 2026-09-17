@@ -16,7 +16,7 @@
  * - **Windows.** `\\.\pipe\handoff-<h>`, `h` being the first 16 hex digits of the SHA-256 of
  *   the lower-cased `USERDOMAIN\USERNAME`. The pipe namespace is machine-global, so the
  *   suffix is what keeps two users' apps apart. When `HANDOFF_HOME` is set — tests and the
- *   e2e isolation of `TASKS.md` §0.4 item 4 — it is mixed in as `<user>|<home>`, so a test
+ *   e2e isolation of implementation decision 4 — it is mixed in as `<user>|<home>`, so a test
  *   instance cannot land on the pipe of the app the owner is actually using.
  *
  * Linux is not a supported platform; it gets the macOS shape because the code is written
@@ -79,7 +79,7 @@ export function socketPointerPath(env?: EnvRecord): string {
 /**
  * The 16 hex digits that name the pipe. `home` is the value of `HANDOFF_HOME` when it is
  * set and `undefined` otherwise, which is the difference between the design's rule and the
- * test isolation of §0.4 item 4 — and the only difference: the digest is over
+ * test isolation of implementation decision 4 — and the only difference: the digest is over
  * `<user>` or `<user>|<home>`, with nothing else added and nothing else lower-cased.
  */
 export function pipeSuffix(userKey: string, home: string | undefined): string {

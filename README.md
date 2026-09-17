@@ -15,7 +15,9 @@ back an **outcome**: what happened, and what to do next.
 
 The formats are public and versioned, the server is MIT, and it works on its own in any MCP
 client. An overlay application may connect to it over a local socket to show the handoff to
-the user; this repository documents the socket, not that application.
+the user; this repository documents the socket, not that application. The one that exists is
+[Baton](https://github.com/Cepeppe/handoff-app), also MIT, which bundles a pinned, signed release
+of this server.
 
 **Status: work in progress. Nothing is stable yet.**
 
@@ -120,6 +122,11 @@ $ handoff-mcp runbooks search --where "Stripe Dashboard > Developers > Webhooks"
 | [Building the executables](docs/build-sea.md)             | The standalone per-platform build                         |
 | [Measured agent facts](docs/agent-facts.md)               | What was measured against the real agent, and when        |
 
+Comments, documents and commit messages cite the design this server was built from: a section
+such as `§5.8`, a requirement such as `SPEC-05`, a design decision such as `DD-26`, a task such as
+`T-054`, or "implementation decision 7". Those documents are published with the app, in
+[`handoff-app/docs/design`](https://github.com/Cepeppe/handoff-app/tree/main/docs/design).
+
 The machine-readable contract is in [`schemas/`](schemas/): the three JSON Schemas and
 [`tool-contract.v1.md`](schemas/tool-contract.v1.md), from which the texts the server sends
 are generated. [`patterns/`](patterns/) holds the certain-secret patterns and the stop-word
@@ -145,3 +152,7 @@ Node 22 is the minimum supported version (`engines.node`); `.nvmrc` and `.node-v
 
 MIT — see [`LICENSE`](LICENSE). That covers the server, the schemas, the patterns, the
 channel definition and the fixtures.
+
+The bundle inlines npm packages that keep their own licences: the npm package carries their
+texts in `dist/THIRD-PARTY-NOTICES.md`, and every release publishes, beside each executable,
+a `-notices.md` file with those texts and the licence of Node.js, which the executable contains.

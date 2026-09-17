@@ -194,7 +194,7 @@ export function firstWorkspaceFolder(
 
 /**
  * `HANDOFF_HOME` as it was set, or `undefined`. The Windows pipe name mixes this value in
- * when it is present (§0.4 item 4 of `TASKS.md`), so the two peers have to agree on what
+ * when it is present (implementation decision 4), so the two peers have to agree on what
  * "set" means: the trimmed value, exactly the one `homeDir` uses, so that the pipe and the
  * folder can never disagree about which instance is being addressed.
  */
@@ -204,7 +204,7 @@ export function homeOverride(env: EnvRecord = process.env): string | undefined {
 
 /**
  * `HANDOFF_HOME` when set, else `~/.handoff` (§4.1, §5.12). `HANDOFF_HOME` exists for
- * tests and for the e2e isolation of §0.4 item 4; nothing in production sets it.
+ * tests and for the e2e isolation of implementation decision 4; nothing in production sets it.
  */
 export function homeDir(env: EnvRecord = process.env): string {
   return homeOverride(env) ?? join(homedir(), HOME_FOLDER_NAME);

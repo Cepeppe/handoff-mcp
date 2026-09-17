@@ -1,5 +1,5 @@
 # Release watch: the assumption canaries and E2E-8 against the real agents
-# (TECHNICAL-DESIGN §11.5, TASKS.md §0.4 items 3 and 9).
+# (TECHNICAL-DESIGN §11.5, implementation decisions 3 and 9).
 #
 # `workflow_dispatch` only, and deliberately so. There is no schedule because the canary
 # needs credentials nobody has provisioned (T-024 is deferred): until then the owner runs
@@ -63,7 +63,7 @@ jobs:
   # reported and never fails the job: the run that follows says whether it matters.
   #
   # The runner list is built here rather than written as a matrix, because macOS minutes
-  # cost ten times as much (§0.4 item 7) and must stay opt-in even inside a workflow that
+  # cost ten times as much (implementation decision 7) and must stay opt-in even inside a workflow that
   # is already dispatch-only. The label is an input and not a literal: `macos-13` stopped
   # receiving runners with no error at all (T-009), and changing a label must not mean
   # editing this file.
@@ -82,7 +82,7 @@ jobs:
       kilo_code_pinned: ${{ steps.kilo_code.outputs.pinned }}
       runners: ${{ steps.runners.outputs.list }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - id: version
         shell: bash
@@ -161,11 +161,11 @@ jobs:
         os: ${{ fromJSON(needs.plan.outputs.runners) }}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: pnpm
@@ -211,7 +211,7 @@ jobs:
 
       - name: Keep the report
         if: always() && steps.secret.outputs.present == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: canary-claude-code-${{ matrix.os }}
           path: test/canary/results/last-run.json
@@ -229,11 +229,11 @@ jobs:
         os: ${{ fromJSON(needs.plan.outputs.runners) }}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: pnpm
@@ -282,7 +282,7 @@ jobs:
 
       - name: Keep the report
         if: always() && steps.secret.outputs.present == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: canary-codex-${{ matrix.os }}
           path: test/canary/results/last-run.json
@@ -301,11 +301,11 @@ jobs:
         os: ${{ fromJSON(needs.plan.outputs.runners) }}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: pnpm
@@ -348,7 +348,7 @@ jobs:
 
       - name: Keep the report
         if: always() && steps.secret.outputs.present == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: canary-opencode-${{ matrix.os }}
           path: test/canary/results/last-run.json
@@ -370,11 +370,11 @@ jobs:
         os: ${{ fromJSON(needs.plan.outputs.runners) }}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: pnpm
@@ -417,7 +417,7 @@ jobs:
 
       - name: Keep the report
         if: always() && steps.secret.outputs.present == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: canary-kilo-code-${{ matrix.os }}
           path: test/canary/results/last-run.json
@@ -435,9 +435,9 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         continue-on-error: true
         with:
           pattern: canary-*

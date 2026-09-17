@@ -1,6 +1,6 @@
 /**
  * E2E-8, the one end-to-end scenario the server can run alone (T-023, TECHNICAL-DESIGN
- * §11.5, §5.9, SRV-14..16, ARCH-04; `TASKS.md` §0.4 item 3).
+ * §11.5, §5.9, SRV-14..16, ARCH-04; implementation decision 3).
  *
  * No overlay is listening — the harness never starts one and `HANDOFF_HOME` points at an
  * empty temporary folder — so `handoff_to_user` must answer `text_mode` with the spec

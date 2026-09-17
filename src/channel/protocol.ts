@@ -52,7 +52,7 @@ export const PROTOCOL_UNSUPPORTED_CODE = -32002;
 
 /**
  * The five application errors of §6.3, numbered in `protocol/channel/README.md` because the
- * design names them without giving them codes (`DEVIATIONS.md`, T-007). The name also
+ * design names them without giving them codes (T-007). The name also
  * travels in `message`, but the **code alone** is what the pipeline maps to the error
  * catalogue of §4.7.5: a sentence is a thing to read, a number is a thing to branch on.
  * `test/contract/channel.test.ts` pins these against the README table.

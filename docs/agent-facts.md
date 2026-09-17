@@ -171,7 +171,7 @@ not the parent, is what the app has to intersect (SRV-17, DD-22).
 With no overlay listening, `handoff_to_user` answered `status: "text_mode"` with the spec
 rendered as the block of §5.9, and the agent presented the steps in the chat. Three turns.
 The rest of §11.5's end-to-end scenarios need the overlay and are not run from this
-repository (see `TASKS.md` §0.4 item 3).
+repository (see implementation decision 3).
 
 ### How an MCP tool actually reaches the model
 

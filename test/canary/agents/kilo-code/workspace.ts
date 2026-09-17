@@ -1,14 +1,14 @@
 /**
  * The command line and the environment of one `kilo run` (T-081, TECHNICAL-DESIGN §11.5, and
- * the `DEVIATIONS.md` entry of 2026-09-11 that makes Kilo Code the fifth agent). The Kilo Code
+ * implementation decision 13, which makes Kilo Code the fifth agent). The Kilo Code
  * twin of `../opencode/workspace.ts`, and pure for the same reason:
  * `test/unit/canary/kilo-code.test.ts` pins every shape here without a real agent, so a
  * malformed configuration cannot make every Kilo Code canary fail for a reason that has nothing
  * to do with Kilo.
  *
  * Kilo's CLI is a fork of OpenCode, and what keeps a run off the user's own configuration is
- * OpenCode's recipe under Kilo's names, measured against Kilo 7.6.2 on 2026-09-12 (T-080's
- * Result block, then again by these canaries):
+ * OpenCode's recipe under Kilo's names, measured against Kilo 7.6.2 on 2026-09-12 (T-080,
+ * then again by these canaries):
  *
  * 1. **Our server is declared in `KILO_CONFIG_CONTENT`**, Kilo's inline configuration, so
  *    nothing is written into a file Kilo reads — and Kilo rewrites the files it reads (T-080).

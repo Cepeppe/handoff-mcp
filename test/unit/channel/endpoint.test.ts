@@ -6,7 +6,7 @@
  * machine derives is a name it will accept, and whether `net.connect` reaches a listener on
  * it. That is a named pipe on Windows and a Unix socket everywhere else, so this test is the
  * one place where the platform branch of `resolveEndpoint` is actually exercised — with a
- * `HANDOFF_HOME` of its own, so it can never meet the app the owner is running (§0.4 item 4).
+ * `HANDOFF_HOME` of its own, so it can never meet the app the owner is running (implementation decision 4).
  *
  * The scripted double with the golden sequences is T-019; this is a smoke of the transport.
  */
@@ -93,7 +93,7 @@ describe('the endpoint this machine derives', () => {
     cleanups.push(() => {
       rmSync(home, { recursive: true, force: true });
     });
-    const env = { HANDOFF_HOME: home, USERDOMAIN: 'ACME', USERNAME: 'Giuse' };
+    const env = { HANDOFF_HOME: home, USERDOMAIN: 'ACME', USERNAME: 'Alice' };
     writeFileSync(join(home, 'channel.token'), `${TOKEN}\n`, 'utf8');
 
     const endpoint = resolveEndpoint({ env });

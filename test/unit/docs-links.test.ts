@@ -139,7 +139,7 @@ describe('this repository', () => {
     expect(result.stdout).toMatch(/check-links: \d+ relative link\(s\) in \d+ markdown file\(s\)/);
   });
 
-  /** The documents NFR-16 requires, each as its own page (T-022 deliverables). */
+  /** The documents NFR-16 requires, each as its own page (T-022). */
   const REQUIRED_PAGES = [
     'index.md',
     'handoff-spec.md',

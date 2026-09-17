@@ -9,6 +9,26 @@ schema version, which is independent of the package version.
 
 ## [Unreleased]
 
+### Added
+
+- Third-party notices. `pnpm build` writes `dist/THIRD-PARTY-NOTICES.md`, with the licence
+  text of every npm package the bundle inlines, and the npm package ships it; every executable
+  of a release is published with `handoff-mcp-<version>-<platform>-notices.md`, which adds the
+  licence of the Node.js binary the executable is made of. Both are listed in `SHA256SUMS`, so
+  the signature covers them.
+
+- `SECURITY.md`, Dependabot for the actions and the npm packages, and a secret-scanning
+  configuration that leaves out the synthetic keys of the fixtures and the tests.
+
+### Changed
+
+- Comments and documents cite the published design: the design documents, the implementation
+  decisions and the task list are in `handoff-app/docs/design`, which the README links.
+- The workflows pin every action to a commit.
+- `build/verify-release.mjs` needs no token now that the repository is public. It still sends
+  `GH_TOKEN`, `GITHUB_TOKEN` or the one of `gh auth token` when there is one, to stay clear of
+  the anonymous rate limit, and a token the API refuses is dropped rather than fatal.
+
 ## [1.7.0] - 2026-09-12
 
 Kilo Code is the sixth agent in the capability table, on both of its surfaces — its CLI and its
