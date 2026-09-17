@@ -24,8 +24,9 @@
 //   --keep               do not delete the directory afterwards
 //   --offline            verify the assets already in --dir instead of downloading
 //
-// Authentication: `handoff-mcp` is private for now, so the GitHub API needs a token. It is
-// read from `GH_TOKEN` or `GITHUB_TOKEN`, and locally falls back to `gh auth token`.
+// Authentication: none is required, because `handoff-mcp` is public. A token is still sent
+// when one is at hand, since the GitHub API allows an anonymous address 60 requests an hour:
+// `GH_TOKEN` or `GITHUB_TOKEN`, then `gh auth token`.
 import { execFileSync } from 'node:child_process';
 import { createHash, createPublicKey, verify as verifySignature } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
@@ -182,27 +183,38 @@ function verifyMinisign(content, signatureText, publicKey) {
 
 // ------------------------------------------------------------------------------ GitHub
 
+/** The token to send, if one is at hand; `undefined` reads the public release anonymously. */
 function token() {
-  const fromEnv = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
+  const fromEnv = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
   if (fromEnv !== undefined && fromEnv !== '') return fromEnv;
   try {
-    return execFileSync('gh', ['auth', 'token'], { encoding: 'utf8', stdio: 'pipe' }).trim();
+    const cli = execFileSync('gh', ['auth', 'token'], { encoding: 'utf8', stdio: 'pipe' }).trim();
+    return cli === '' ? undefined : cli;
   } catch {
-    fail('no GitHub token: set GH_TOKEN, or log in with `gh auth login`');
+    // No GitHub CLI, or one that is not logged in.
+    return undefined;
   }
 }
 
 async function api(path, accept, auth) {
-  const response = await fetch(`https://api.github.com${path}`, {
-    headers: {
-      accept,
-      authorization: `Bearer ${auth}`,
-      'user-agent': 'handoff-mcp-verify-release',
-      'x-github-api-version': '2022-11-28',
-    },
-  });
+  const request = (bearer) =>
+    fetch(`https://api.github.com${path}`, {
+      headers: {
+        accept,
+        ...(bearer === undefined ? {} : { authorization: `Bearer ${bearer}` }),
+        'user-agent': 'handoff-mcp-verify-release',
+        'x-github-api-version': '2022-11-28',
+      },
+    });
+  let response = await request(auth);
+  // A stale token must not block a download that needs none.
+  if (response.status === 401 && auth !== undefined) response = await request(undefined);
   if (!response.ok) {
-    fail(`GET ${path} answered ${response.status} ${response.statusText}`);
+    const limited = (response.status === 403 || response.status === 429) && auth === undefined;
+    const hint = limited
+      ? ' — the anonymous rate limit of the GitHub API: set GH_TOKEN or run `gh auth login`'
+      : '';
+    fail(`GET ${path} answered ${response.status} ${response.statusText}${hint}`);
   }
   return response;
 }
