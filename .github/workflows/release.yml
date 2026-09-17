@@ -162,6 +162,9 @@ jobs:
     # release; a failed one must.
     if: ${{ !cancelled() && needs.guard.result == 'success' && needs.sea_win32_x64.result == 'success' && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
+    # The signing key is a secret of this environment, not of the repository: the job waits
+    # for a required reviewer before it can read the key.
+    environment: release
     permissions:
       contents: write
     env:
@@ -189,7 +192,8 @@ jobs:
           sha256sum handoff-mcp-* > SHA256SUMS
           cat SHA256SUMS
 
-      # `MINISIGN_SECRET_KEY` and `MINISIGN_PASSWORD` are the repository secrets of T-010.
+      # `MINISIGN_SECRET_KEY` and `MINISIGN_PASSWORD` are the secrets of T-010, kept in the
+      # `release` environment.
       # The key file is written with a private umask and deleted in the same step, and the
       # password reaches minisign on stdin, so neither value can reach the log. The
       # verification right after is what proves the secret key still matches the public key
