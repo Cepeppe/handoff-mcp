@@ -20,6 +20,9 @@ schema version, which is independent of the package version.
 - `SECURITY.md`, Dependabot for the actions and the npm packages, and a secret-scanning
   configuration that leaves out the synthetic keys of the fixtures and the tests.
 
+- `CONTRIBUTING.md`: which changes go straight to a pull request and which start with an issue,
+  the checks a pull request runs, and the licence of a contribution.
+
 ### Changed
 
 - Comments and documents cite the published design: the design documents, the implementation
