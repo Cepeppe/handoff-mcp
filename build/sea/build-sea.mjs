@@ -32,6 +32,15 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  METAFILE,
+  bundledPackages,
+  executableNoticesName,
+  nodeLicence,
+  renderExecutableNotices,
+  writeText,
+} from '../third-party-notices.mjs';
+
 const require = createRequire(import.meta.url);
 const seaDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(seaDir, '..', '..');
@@ -71,6 +80,11 @@ function assetName(version, target) {
 
 function readVersion() {
   return JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')).version;
+}
+
+function inCI() {
+  const value = process.env.CI;
+  return value !== undefined && value !== '' && value !== '0' && value !== 'false';
 }
 
 function run(command, args, label) {
@@ -130,14 +144,14 @@ function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
-function build() {
+async function build() {
   const target = hostTarget();
   const version = readVersion();
   const name = assetName(version, target);
   const outPath = join(OUT_DIR, name);
 
-  if (!existsSync(join(repoRoot, BUNDLE))) {
-    fail(`${BUNDLE} is missing: run \`pnpm build\` first`);
+  for (const built of [BUNDLE, METAFILE]) {
+    if (!existsSync(join(repoRoot, built))) fail(`${built} is missing: run \`pnpm build\` first`);
   }
 
   mkdirSync(join(repoRoot, OUT_DIR), { recursive: true });
@@ -178,6 +192,22 @@ function build() {
     console.error('ad-hoc signed the binary (the app pipeline re-signs it, T-060)');
   }
 
+  // 6. the licences of what the executable carries — this Node binary and the packages of the
+  //    bundle — as the release asset published beside it. A release must carry the texts; a
+  //    local build that is offline links to the licence of Node.js instead.
+  const node = await nodeLicence(process.execPath, process.version);
+  if (node.text === undefined) {
+    if (inCI()) fail(`the licence of Node.js ${process.version} could not be read: ${node.source}`);
+    console.error(`warning: the notices link to ${node.source}, they do not carry its text`);
+  }
+  const metafile = JSON.parse(readFileSync(join(repoRoot, METAFILE), 'utf8'));
+  const noticesPath = join(OUT_DIR, executableNoticesName(version, target));
+  writeText(
+    join(repoRoot, noticesPath),
+    renderExecutableNotices(bundledPackages(metafile, repoRoot), { asset: name, node }),
+  );
+  console.error(`wrote ${noticesPath} (Node.js licence from ${node.source})`);
+
   const size = statSync(join(repoRoot, outPath)).size;
   console.error(`\n${outPath}`);
   console.error(`  target  ${target}`);
@@ -202,7 +232,7 @@ function splitHost(host) {
   return [host.slice(0, dash), host.slice(dash + 1)];
 }
 
-function main(argv) {
+async function main(argv) {
   const hostIndex = argv.indexOf('--host');
   const host = hostIndex === -1 ? undefined : argv[hostIndex + 1];
   if (hostIndex !== -1 && host === undefined) fail('--host needs a value');
@@ -213,11 +243,11 @@ function main(argv) {
   }
   if (host !== undefined)
     fail('--host only makes sense with --print-target: SEA cannot cross-build');
-  build();
+  await build();
 }
 
 try {
-  main(process.argv.slice(2));
+  await main(process.argv.slice(2));
 } catch (error) {
   if (!(error instanceof BuildError)) throw error;
   console.error(`build-sea: ${error.message}`);

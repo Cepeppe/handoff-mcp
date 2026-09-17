@@ -103,14 +103,17 @@ describe('the published package', () => {
     for (const target of targets) expect(shipped(target)).toBe(true);
   });
 
-  it('ships one file out of dist/, never the directory', () => {
+  it('ships the bundle and its notices out of dist/, never the directory', () => {
     // `dist/` also holds the SEA output and the format tarballs. Listing the directory put
-    // 189 MB of build products into the package; listing the bundle puts the bundle in.
+    // 189 MB of build products into the package; listing the bundle puts the bundle in, and
+    // the notices of the packages the bundle inlines go with it.
     expect(manifest.files.filter((entry) => entry.startsWith('dist'))).toEqual([
       'dist/handoff-mcp.cjs',
+      'dist/THIRD-PARTY-NOTICES.md',
     ]);
     expect(shipped('dist/sea/handoff-mcp.blob')).toBe(false);
     expect(shipped('dist/handoff-mcp.cjs.map')).toBe(false);
+    expect(shipped('dist/handoff-mcp.meta.json')).toBe(false);
   });
 
   it('gives the bundle the shebang npm needs to launch it', () => {

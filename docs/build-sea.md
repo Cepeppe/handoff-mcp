@@ -23,6 +23,13 @@ src/**.ts
 publishes: `handoff-mcp-<ver>-darwin-arm64`, `handoff-mcp-<ver>-darwin-x64`,
 `handoff-mcp-<ver>-win32-x64.exe`.
 
+Beside each one it writes `handoff-mcp-<ver>-<platform>-notices.md`, which the release
+publishes too: the licence of the Node.js binary it copied, then the licences of the npm
+packages the bundle inlines, as `build/bundle.mjs` read them from the metafile of the bundle
+(`build/third-party-notices.mjs`). The Node.js licence comes from beside the binary, where the
+official archives and `actions/setup-node` put it, or else from the tag of the same version in
+`nodejs/node`; a build in CI that can read neither fails, a local one links to it instead.
+
 ## Node version
 
 **Node 24**, pinned in `.node-version` and read from there by every workflow

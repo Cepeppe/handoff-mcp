@@ -52,8 +52,9 @@ and may change in any release.
 Semantic versioning, against the public surface: the three schemas, the tool contract, the
 CLI and its exit codes. The channel is not part of that surface.
 
-Releases are tagged `v<version>`, and each one publishes a standalone executable per platform,
-a `SHA256SUMS` file and a minisign signature of it. Verify with the public key committed at
+Releases are tagged `v<version>`, and each one publishes a standalone executable per platform
+with the third-party notices of what it carries, a `SHA256SUMS` file and a minisign signature
+of it. Verify with the public key committed at
 [`keys/handoff-mcp-release.pub`](../keys/handoff-mcp-release.pub):
 
 ```console

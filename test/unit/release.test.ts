@@ -427,18 +427,26 @@ describe('release.yml', () => {
   });
 
   it('builds the executables the way sea.yml does', () => {
-    /** The artifact `path:` a workflow uploads for one release target. */
-    const uploadedPath = (text: string, target: string) => {
-      const next = (between(text, `name: sea-${target}\n`).split('\n')[0] ?? '').trim();
-      expect(next).toMatch(/^path: dist\/sea\/handoff-mcp-\*-/);
-      return next;
+    /** The artifact paths a workflow uploads for one release target: a `path: |` block. */
+    const uploadedPaths = (text: string, target: string) => {
+      const [first = '', ...rest] = between(text, `name: sea-${target}\n`).split('\n');
+      expect(first.trim()).toBe('path: |');
+      const indent = first.length - first.trimStart().length;
+      const end = rest.findIndex((line) => line.length - line.trimStart().length <= indent);
+      const paths = rest.slice(0, end).map((line) => line.trim());
+      // The executable, and the notices of what it carries (build/third-party-notices.mjs).
+      expect(paths).toEqual([
+        `dist/sea/handoff-mcp-*-${target}${target.startsWith('win32-') ? '.exe' : ''}`,
+        `dist/sea/handoff-mcp-*-${target}-notices.md`,
+      ]);
+      return paths;
     };
 
     const targets = ['win32-x64', 'darwin-arm64', 'darwin-x64'];
     expect(release.match(/pnpm build:sea/g)).toHaveLength(targets.length);
     expect(release.match(/pnpm smoke:sea/g)).toHaveLength(targets.length);
     for (const target of targets) {
-      expect(uploadedPath(release, target)).toBe(uploadedPath(sea, target));
+      expect(uploadedPaths(release, target)).toEqual(uploadedPaths(sea, target));
     }
     expect(release.match(/node-version-file: \.node-version/g)).toHaveLength(targets.length + 3);
   });

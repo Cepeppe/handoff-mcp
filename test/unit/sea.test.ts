@@ -119,6 +119,13 @@ describe('build-sea.mjs', () => {
     expect(buildSeaSource).toContain("'--remove-signature'");
     expect(buildSeaSource).toContain("'--sign', '-'");
   });
+
+  it('writes the notices of Node.js and of the bundle beside the executable', () => {
+    expect(buildSeaSource).toContain('renderExecutableNotices(');
+    expect(buildSeaSource).toContain('executableNoticesName(version, target)');
+    // A release has to carry the licence texts; only a local build may fall back to a link.
+    expect(buildSeaSource).toMatch(/if \(inCI\(\)\) fail\(`the licence of Node\.js/);
+  });
 });
 
 describe('sea.yml', () => {
@@ -139,7 +146,10 @@ describe('sea.yml', () => {
   it('runs the build and the smoke test of every leg and uploads the asset', () => {
     expect(workflow.match(/pnpm build:sea/g)).toHaveLength(ASSETS.length);
     expect(workflow.match(/pnpm smoke:sea/g)).toHaveLength(ASSETS.length);
-    for (const [target] of ASSETS) expect(workflow).toContain(`name: sea-${target}`);
+    for (const [target] of ASSETS) {
+      expect(workflow).toContain(`name: sea-${target}`);
+      expect(workflow).toContain(`dist/sea/handoff-mcp-*-${target}-notices.md`);
+    }
   });
 
   it('pins the Node line in one place, .node-version', () => {
