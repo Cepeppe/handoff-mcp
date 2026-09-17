@@ -1,6 +1,6 @@
 {
   "name": "baton-handoff-mcp",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Contextual handoff MCP server: public spec/outcome/runbook formats and reference server",
   "license": "MIT",
   "author": "Cepeppe",

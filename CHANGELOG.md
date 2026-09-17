@@ -9,6 +9,14 @@ schema version, which is independent of the package version.
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-09-17
+
+The first release of the public repository. Every executable is now published with the licence
+texts of the code it contains, Node.js included, a published release can be verified without a
+GitHub token, and the design the server was built from is published with the app, in
+`handoff-app/docs/design`. Nothing the server does has changed: the public formats, the tool
+contract, the patterns and the channel definition are those of `1.7.0`.
+
 ### Added
 
 - Third-party notices. `pnpm build` writes `dist/THIRD-PARTY-NOTICES.md`, with the licence
@@ -16,10 +24,8 @@ schema version, which is independent of the package version.
   of a release is published with `handoff-mcp-<version>-<platform>-notices.md`, which adds the
   licence of the Node.js binary the executable is made of. Both are listed in `SHA256SUMS`, so
   the signature covers them.
-
 - `SECURITY.md`, Dependabot for the actions and the npm packages, and a secret-scanning
   configuration that leaves out the synthetic keys of the fixtures and the tests.
-
 - `CONTRIBUTING.md`: which changes go straight to a pull request and which start with an issue,
   the checks a pull request runs, and the licence of a contribution.
 
